@@ -6,45 +6,13 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
+
+	"TaskTracker/model"
+	"TaskTracker/repository/task"
 )
 
-type Task struct {
-	ID          int
-	Title       string
-	Description string
-	Completed   bool
-	CreatedAt   time.Time
-	CompletedAt *time.Time // указатель, nil если не выполнена
-}
-
-var tasks = make(map[int]*Task)
-var nextID = 1
-
-func addTask(reader *bufio.Reader) {
-	fmt.Print("Введите название задачи: ")
-	title, _ := reader.ReadString('\n')
-	title = strings.TrimSpace(title)
-
-	fmt.Print("Введите описание вашей задачи: ")
-	description, _ := reader.ReadString('\n')
-	description = strings.TrimSpace(description)
-
-	task := &Task{
-		ID:          nextID,
-		Title:       title,
-		Description: description,
-		Completed:   false,
-		CreatedAt:   time.Now(),
-		CompletedAt: nil,
-	}
-
-	tasks[nextID] = task
-	fmt.Printf("✅ Задача: '%s' добавлена успешно.\n", task.Title)
-	nextID++
-}
-
 func readID(reader *bufio.Reader) (int, error) {
+	fmt.Print("\nВведите ID задачи: ")
 	strId, _ := reader.ReadString('\n')
 	id, err := strconv.Atoi(strings.TrimSpace(strId))
 	if err != nil || id < 1 {
@@ -53,7 +21,7 @@ func readID(reader *bufio.Reader) (int, error) {
 	return id, nil
 }
 
-func printTaskData(task *Task) {
+func printTaskData(task *model.Task) {
 	status := "❌ - Не выполнена"
 	if task.Completed {
 		status = "✅ - Выполнена"
@@ -66,67 +34,73 @@ func printTaskData(task *Task) {
 	}
 }
 
-func listTasks() {
-	if len(tasks) == 0 {
-		fmt.Println("Задач нет.")
+func addTask(reader *bufio.Reader, repo task.Repository) {
+	fmt.Println("=======================")
+	fmt.Print("Введите название задачи: ")
+	title, _ := reader.ReadString('\n')
+	title = strings.TrimSpace(title)
+
+	fmt.Print("Введите описание вашей задачи: ")
+	description, _ := reader.ReadString('\n')
+	description = strings.TrimSpace(description)
+
+	repo.Add(title, description)
+	fmt.Printf("\n✅ Задача: '%s' добавлена успешно.\n", title)
+}
+
+func listTasks(repo task.Repository) {
+	if repo.IsEmpty() {
+		fmt.Println("Задач нет")
 		return
 	}
 
-	fmt.Println("\n=== Список задач ===")
+	tasks, err := repo.GetAll()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
 	for _, task := range tasks {
 		printTaskData(task)
-		fmt.Println()
 	}
 
 }
 
-func findTaskById(reader *bufio.Reader) {
-	if len(tasks) == 0 {
-		fmt.Println("Задач нет.")
-		return
-	}
-
+func findTaskById(reader *bufio.Reader, repo task.Repository) {
 	var id, err = readID(reader)
 	if err != nil {
 		fmt.Println("❌ Ошибка ввода:", err)
 		return
 	}
 
-	task, exists := tasks[id]
-	if !exists {
-		fmt.Println("Указанной задачи не существует")
+	task, err := repo.GetByID(id)
+	if err != nil {
+		fmt.Println(err)
 		return
 	}
 	printTaskData(task)
-	fmt.Println()
 
 }
 
-func completeTask(reader *bufio.Reader) {
-	if len(tasks) == 0 {
-		fmt.Println("Задач нет.")
-		return
-	}
-
+func completeTask(reader *bufio.Reader, repo task.Repository) {
 	var id, err = readID(reader)
 	if err != nil {
 		fmt.Println("❌ Ошибка ввода:", err)
 		return
 	}
 
-	task, exists := tasks[id]
-	if !exists {
-		fmt.Println("Указанной задачи не существует")
+	isCompleteErr := repo.Complete(id)
+
+	if isCompleteErr != nil {
+		fmt.Println(isCompleteErr)
 		return
 	}
 
-	if task.Completed {
-		fmt.Println("Задача уже выполнена")
+	task, err := repo.GetByID(id)
+	if err != nil {
+		fmt.Println(err)
 		return
 	}
-	timeNow := time.Now()
-	task.Completed = true
-	task.CompletedAt = &timeNow
 
 	fmt.Printf("✅ Задача '%s' отмечена как выполненная в %s\n",
 		task.Title, task.CompletedAt.Format("02.01.2006 15:04:05"))
@@ -134,6 +108,8 @@ func completeTask(reader *bufio.Reader) {
 }
 
 func main() {
+	var repo task.Repository
+	repo = task.NewManager()
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Println("\n=== Менеджер задач ===")
@@ -142,20 +118,20 @@ func main() {
 		fmt.Println("3. 📋 Найти задачу по ID")
 		fmt.Println("4. ✏️ Отметить задачу как выполненную")
 		fmt.Println("5. 🚪 Выход")
-		fmt.Print("Выберите действие: ")
+		fmt.Print("\nВыберите действие: ")
 
 		choice, _ := reader.ReadString('\n')
 		choice = strings.TrimSpace(choice)
 
 		switch choice {
 		case "1":
-			addTask(reader)
+			addTask(reader, repo)
 		case "2":
-			listTasks()
+			listTasks(repo)
 		case "3":
-			findTaskById(reader)
+			findTaskById(reader, repo)
 		case "4":
-			completeTask(reader)
+			completeTask(reader, repo)
 		case "5":
 			return
 		default:
