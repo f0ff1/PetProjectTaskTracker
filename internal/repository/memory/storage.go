@@ -1,32 +1,31 @@
-package task
+package memory
 
 import (
 	"fmt"
 	"time"
 
-	"TaskTracker/model"
-
+	"TaskTracker/internal/model"
 )
 
-type Manager struct {
+type Storage struct {
 	tasks  map[int]*model.Task
 	nextID int
 }
 
-func NewManager() *Manager {
-	return &Manager{
+func NewStorage() *Storage {
+	return &Storage{
 		tasks:  make(map[int]*model.Task),
 		nextID: 1,
 	}
 }
 
-func (m *Manager) IsEmpty() bool {
-	return len(m.tasks) == 0
+func (s *Storage) IsEmpty() bool {
+	return len(s.tasks) == 0
 }
 
-func (m *Manager) Add(title, desc string) *model.Task {
+func (s *Storage) Add(title, desc string) *model.Task {
 	task := &model.Task{
-		ID:          m.nextID,
+		ID:          s.nextID,
 		Title:       title,
 		Description: desc,
 		Completed:   false,
@@ -34,18 +33,18 @@ func (m *Manager) Add(title, desc string) *model.Task {
 		CompletedAt: nil,
 	}
 
-	m.tasks[m.nextID] = task
-	m.nextID++
+	s.tasks[s.nextID] = task
+	s.nextID++
 	return task
 }
 
-func (m *Manager) GetAll() ([]*model.Task, error) {
-	if m.IsEmpty() {
+func (s *Storage) GetAll() ([]*model.Task, error) {
+	if s.IsEmpty() {
 		return []*model.Task{}, fmt.Errorf("Задач нет")
 	}
 
-	tasks := make([]*model.Task, 0, len(m.tasks))
-	for _, task := range m.tasks {
+	tasks := make([]*model.Task, 0, len(s.tasks))
+	for _, task := range s.tasks {
 		tasks = append(tasks, task)
 	}
 
@@ -53,30 +52,30 @@ func (m *Manager) GetAll() ([]*model.Task, error) {
 
 }
 
-func (m *Manager) GetByID(id int) (*model.Task, error) {
-	if m.IsEmpty() {
+func (s *Storage) GetByID(id int) (*model.Task, error) {
+	if s.IsEmpty() {
 		return nil, fmt.Errorf("Список задач пуст")
 	}
 	if id < 1 {
 		return nil, fmt.Errorf("Неккоректный ID")
 	}
 
-	task, exists := m.tasks[id]
+	task, exists := s.tasks[id]
 	if !exists {
 		return nil, fmt.Errorf("Несуществующий ID")
 	}
 	return task, nil
 }
 
-func (m *Manager) Complete(id int) error {
-	if m.IsEmpty() {
+func (s *Storage) Complete(id int) error {
+	if s.IsEmpty() {
 		return fmt.Errorf("Список задач пуст")
 	}
 	if id < 1 {
 		return fmt.Errorf("Неккоректный ID")
 	}
 
-	task, exists := m.tasks[id]
+	task, exists := s.tasks[id]
 	if !exists {
 		return fmt.Errorf("Несуществующий ID")
 	}

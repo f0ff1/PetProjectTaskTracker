@@ -7,8 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"TaskTracker/model"
-	"TaskTracker/repository/task"
+	"TaskTracker/internal/model"
+	"TaskTracker/internal/repository"
+	"TaskTracker/internal/repository/memory"
 )
 
 func readID(reader *bufio.Reader) (int, error) {
@@ -34,7 +35,7 @@ func printTaskData(task *model.Task) {
 	}
 }
 
-func addTask(reader *bufio.Reader, repo task.Repository) {
+func addTask(reader *bufio.Reader, repo repository.Repository) {
 	fmt.Println("=======================")
 	fmt.Print("Введите название задачи: ")
 	title, _ := reader.ReadString('\n')
@@ -48,7 +49,7 @@ func addTask(reader *bufio.Reader, repo task.Repository) {
 	fmt.Printf("\n✅ Задача: '%s' добавлена успешно.\n", title)
 }
 
-func listTasks(repo task.Repository) {
+func listTasks(repo repository.Repository) {
 	if repo.IsEmpty() {
 		fmt.Println("Задач нет")
 		return
@@ -66,7 +67,7 @@ func listTasks(repo task.Repository) {
 
 }
 
-func findTaskById(reader *bufio.Reader, repo task.Repository) {
+func findTaskById(reader *bufio.Reader, repo repository.Repository) {
 	var id, err = readID(reader)
 	if err != nil {
 		fmt.Println("❌ Ошибка ввода:", err)
@@ -82,7 +83,7 @@ func findTaskById(reader *bufio.Reader, repo task.Repository) {
 
 }
 
-func completeTask(reader *bufio.Reader, repo task.Repository) {
+func completeTask(reader *bufio.Reader, repo repository.Repository) {
 	var id, err = readID(reader)
 	if err != nil {
 		fmt.Println("❌ Ошибка ввода:", err)
@@ -108,8 +109,8 @@ func completeTask(reader *bufio.Reader, repo task.Repository) {
 }
 
 func main() {
-	var repo task.Repository
-	repo = task.NewManager()
+	var repo repository.Repository
+	repo = memory.NewStorage()
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Println("\n=== Менеджер задач ===")

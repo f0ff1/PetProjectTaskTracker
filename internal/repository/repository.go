@@ -1,6 +1,6 @@
-package task
+package repository
 
-import "TaskTracker/model"
+import "TaskTracker/internal/model"
 
 type Repository interface {
 	Add(title, description string) *model.Task
