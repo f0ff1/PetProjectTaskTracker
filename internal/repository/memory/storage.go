@@ -2,6 +2,7 @@ package memory
 
 import (
 	"fmt"
+	"math/rand"
 	"time"
 
 	"TaskTracker/internal/model"
@@ -23,7 +24,15 @@ func (s *Storage) IsEmpty() bool {
 	return len(s.tasks) == 0
 }
 
+func generateDefaultName() string {
+	randNumbers := rand.Intn(10000000)
+	return fmt.Sprintf("exr-%07d", randNumbers)
+}
+
 func (s *Storage) Add(title, desc string) *model.Task {
+	if title == "" {
+		title = generateDefaultName()
+	}
 	task := &model.Task{
 		ID:          s.nextID,
 		Title:       title,

@@ -45,8 +45,8 @@ func addTask(reader *bufio.Reader, repo repository.Repository) {
 	description, _ := reader.ReadString('\n')
 	description = strings.TrimSpace(description)
 
-	repo.Add(title, description)
-	fmt.Printf("\n✅ Задача: '%s' добавлена успешно.\n", title)
+	task := repo.Add(title, description)
+	fmt.Printf("\n✅ Задача: '%s' добавлена успешно.\n", task.Title)
 }
 
 func listTasks(repo repository.Repository) {
