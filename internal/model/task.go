@@ -9,4 +9,5 @@ type Task struct {
 	Completed   bool
 	CreatedAt   time.Time
 	CompletedAt *time.Time
+	Tags        []string
 }

@@ -29,7 +29,7 @@ func generateDefaultName() string {
 	return fmt.Sprintf("exr-%07d", randNumbers)
 }
 
-func (s *Storage) Add(title, desc string) *model.Task {
+func (s *Storage) Add(title, desc string, tags []string) *model.Task {
 	if title == "" {
 		title = generateDefaultName()
 	}
@@ -40,9 +40,11 @@ func (s *Storage) Add(title, desc string) *model.Task {
 		Completed:   false,
 		CreatedAt:   time.Now(),
 		CompletedAt: nil,
+		Tags:        tags,
 	}
 
 	s.tasks[s.nextID] = task
+	fmt.Printf("Задаче: %s добавили тэги: %s", title, tags)
 	s.nextID++
 	return task
 }
@@ -74,6 +76,31 @@ func (s *Storage) GetByID(id int) (*model.Task, error) {
 		return nil, fmt.Errorf("Несуществующий ID")
 	}
 	return task, nil
+}
+
+func (s *Storage) GetByTag(tag string) ([]*model.Task, error) {
+	if s.IsEmpty() {
+		return []*model.Task{}, fmt.Errorf("Задач не обнаружено")
+	}
+	taggetTasks := make([]*model.Task, 0)
+	tasks, _ := s.GetAll()
+	for _, task := range tasks {
+		taskTags := task.Tags
+		tagsMap := make(map[string]bool)
+		for _, task := range taskTags {
+			tagsMap[task] = true
+		}
+		if tagsMap[tag] {
+			taggetTasks = append(taggetTasks, task)
+		}
+
+	}
+
+	if len(taggetTasks) < 1 {
+		return taggetTasks, fmt.Errorf("Задач с таким тегом не существует")
+	}
+	return taggetTasks, nil
+
 }
 
 func (s *Storage) Complete(id int) error {
