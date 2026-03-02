@@ -10,6 +10,7 @@ import (
 	"TaskTracker/internal/model"
 	"TaskTracker/internal/repository"
 	"TaskTracker/internal/repository/memory"
+	"TaskTracker/internal/repository/sjson"
 )
 
 func readID(reader *bufio.Reader) (int, error) {
@@ -137,7 +138,11 @@ func completeTask(reader *bufio.Reader, repo repository.Repository) {
 
 func main() {
 	var repo repository.Repository
-	repo = memory.NewStorage()
+	// repo = memory.NewStorage()
+	repo, err := sjson.NewJSONStorage("C:/GoLand/GoCourse/TaskTracker/data/data.json")
+	if err != nil {
+		repo = memory.NewStorage()
+	}
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Println("\n=== Менеджер задач ===")
