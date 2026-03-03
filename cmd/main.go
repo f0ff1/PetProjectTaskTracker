@@ -9,7 +9,6 @@ import (
 
 	"TaskTracker/internal/model"
 	"TaskTracker/internal/repository"
-	"TaskTracker/internal/repository/memory"
 	"TaskTracker/internal/repository/sjson"
 )
 
@@ -17,7 +16,7 @@ func readID(reader *bufio.Reader) (int, error) {
 	fmt.Print("\nВведите ID задачи: ")
 	strId, _ := reader.ReadString('\n')
 	strId = strings.TrimSpace(strId)
-	id, err := strconv.Atoi(strings.TrimSpace(strId))
+	id, err := strconv.Atoi(strId)
 	if err != nil || id < 1 {
 		return 0, fmt.Errorf("некорректный ID")
 	}
@@ -35,6 +34,7 @@ func printTaskData(task *model.Task) {
 	if task.Completed {
 		fmt.Printf("⏰Время завершения: %s\n", task.CompletedAt.Format("02.01.2006 15:04:05"))
 	}
+	fmt.Println()
 }
 
 func addTask(reader *bufio.Reader, repo repository.Repository) {
@@ -53,19 +53,17 @@ func addTask(reader *bufio.Reader, repo repository.Repository) {
 	normalized := replacer.Replace(strTags)
 	sliceTags := strings.Fields(normalized)
 
-	task := repo.Add(title, description, sliceTags)
+	task, err := repo.Add(title, description, sliceTags)
+	if err != nil {
+		fmt.Println(err)
+	}
 	fmt.Printf("\n✅ Задача: '%s' добавлена успешно.\n", task.Title)
 }
 
 func listTasks(repo repository.Repository) {
-	if repo.IsEmpty() {
-		fmt.Println("Задач нет")
-		return
-	}
-
 	tasks, err := repo.GetAll()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("❌ Ошибка: ", err)
 		return
 	}
 
@@ -84,7 +82,7 @@ func findTaskById(reader *bufio.Reader, repo repository.Repository) {
 
 	task, err := repo.GetByID(id)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("❌ Ошибка ввода:", err)
 		return
 	}
 	printTaskData(task)
@@ -139,10 +137,10 @@ func completeTask(reader *bufio.Reader, repo repository.Repository) {
 func main() {
 	var repo repository.Repository
 	// repo = memory.NewStorage()
-	repo, err := sjson.NewJSONStorage("C:/GoLand/GoCourse/TaskTracker/data/data.json")
-	if err != nil {
-		repo = memory.NewStorage()
-	}
+	repo, _ = sjson.NewJSONStorage("C:/GoLand/GoCourse/TaskTracker/data/data.json")
+	// if err != nil {
+	// 	repo = memory.NewStorage()
+	// }
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Println("\n=== Менеджер задач ===")

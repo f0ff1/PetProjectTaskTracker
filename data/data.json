@@ -1,59 +1,16 @@
 {
- "next_id": 7,
+ "next_id": 2,
  "tasks": {
   "1": {
    "ID": 1,
-   "Title": "json-exr-8804866",
+   "Title": "json-exr-3895210",
    "Description": "",
    "Completed": false,
-   "CreatedAt": "2026-03-02T15:19:09.2349811+03:00",
+   "CreatedAt": "2026-03-03T17:50:48.9670914+03:00",
    "CompletedAt": null,
-   "Tags": null
-  },
-  "2": {
-   "ID": 2,
-   "Title": "json-exr-1311116",
-   "Description": "zada4a 1",
-   "Completed": true,
-   "CreatedAt": "2026-03-02T15:20:10.4542876+03:00",
-   "CompletedAt": "2026-03-02T15:46:50.9518103+03:00",
-   "Tags": null
-  },
-  "3": {
-   "ID": 3,
-   "Title": "json-exr-0236228",
-   "Description": "",
-   "Completed": false,
-   "CreatedAt": "2026-03-02T15:21:55.0090847+03:00",
-   "CompletedAt": null,
-   "Tags": null
-  },
-  "4": {
-   "ID": 4,
-   "Title": "json-exr-1411708",
-   "Description": "",
-   "Completed": false,
-   "CreatedAt": "2026-03-02T15:22:00.3597696+03:00",
-   "CompletedAt": null,
-   "Tags": null
-  },
-  "5": {
-   "ID": 5,
-   "Title": "json-exr-3058036",
-   "Description": "",
-   "Completed": false,
-   "CreatedAt": "2026-03-02T15:42:06.2923574+03:00",
-   "CompletedAt": null,
-   "Tags": null
-  },
-  "6": {
-   "ID": 6,
-   "Title": "json-exr-1802974",
-   "Description": "",
-   "Completed": false,
-   "CreatedAt": "2026-03-02T15:43:34.5896647+03:00",
-   "CompletedAt": null,
-   "Tags": null
+   "Tags": [
+    "хуй"
+   ]
   }
  }
 }

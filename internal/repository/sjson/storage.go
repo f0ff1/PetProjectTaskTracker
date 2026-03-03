@@ -1,6 +1,7 @@
 package sjson
 
 import (
+	myErrors "TaskTracker/errors"
 	"TaskTracker/internal/model"
 	"encoding/json"
 	"fmt"
@@ -33,13 +34,13 @@ func NewJSONStorage(path string) (*JSONStorage, error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		//Если файла нема нихуя
 		if err := storage.saveToFile(); err != nil {
-			return nil, fmt.Errorf("Не получилось создать твой ебаный файл йоу: %w", err)
+			return nil, myErrors.ErrCantCreateJsonFile
 		}
 		return storage, nil
 	}
 
 	if err := storage.loadFromFile(); err != nil {
-		return nil, fmt.Errorf("Не смог прочитать ебаные данные: %w", err)
+		return nil, myErrors.ErrCantReadJsonData
 	}
 	return storage, nil
 }
@@ -55,7 +56,7 @@ func (s *JSONStorage) saveToFile() error {
 
 	file, err := os.Create(s.filePath)
 	if err != nil {
-		return fmt.Errorf("Не удалось создать/переписать файл по такому ебаному пути: %w", err)
+		return myErrors.ErrWrongPath
 	}
 	defer file.Close()
 
@@ -70,7 +71,7 @@ func (s *JSONStorage) loadFromFile() error {
 
 	file, err := os.Open(s.filePath)
 	if err != nil {
-		return fmt.Errorf("Не смог прочитать ебаные данные: %w", err)
+		return myErrors.ErrCantReadJsonData
 	}
 	defer file.Close()
 
@@ -97,7 +98,7 @@ func generateDefaultName() string {
 	return fmt.Sprintf("json-exr-%07d", randNumbers)
 }
 
-func (s *JSONStorage) Add(title, description string, tags []string) *model.Task {
+func (s *JSONStorage) Add(title, description string, tags []string) (*model.Task, error) {
 	s.mu.Lock()
 
 	if title == "" {
@@ -111,6 +112,7 @@ func (s *JSONStorage) Add(title, description string, tags []string) *model.Task 
 		Completed:   false,
 		CreatedAt:   time.Now(),
 		CompletedAt: nil,
+		Tags:        tags,
 	}
 
 	s.tasks[s.nextID] = task
@@ -118,10 +120,10 @@ func (s *JSONStorage) Add(title, description string, tags []string) *model.Task 
 	s.mu.Unlock()
 
 	if err := s.saveToFile(); err != nil {
-		fmt.Printf("Не удалось сохранить ебаную таску в JSON %s\n", err)
+		return nil, myErrors.ErrCantSaveTaskToJson
 	}
 
-	return task
+	return task, nil
 
 }
 
@@ -130,7 +132,7 @@ func (s *JSONStorage) GetAll() ([]*model.Task, error) {
 	defer s.mu.RUnlock()
 
 	if s.IsEmpty() {
-		return []*model.Task{}, fmt.Errorf("Задач нема нихуя")
+		return []*model.Task{}, myErrors.ErrTasksNotFound
 	}
 
 	tasks := make([]*model.Task, 0, len(s.tasks))
@@ -145,16 +147,12 @@ func (s *JSONStorage) GetByID(id int) (*model.Task, error) {
 	defer s.mu.RUnlock()
 
 	if s.IsEmpty() {
-		return nil, fmt.Errorf("Задач нема нихуя")
-	}
-
-	if id < 1 {
-		return nil, fmt.Errorf("Не может быть ID < 1, тупица ебаная")
+		return nil, myErrors.ErrTasksNotFound
 	}
 
 	task, exists := s.tasks[id]
 	if !exists {
-		return nil, fmt.Errorf("Несуществующий ID")
+		return nil, myErrors.ErrIdNotExists
 	}
 	return task, nil
 
@@ -165,7 +163,7 @@ func (s *JSONStorage) GetByTag(tag string) ([]*model.Task, error) {
 	defer s.mu.RUnlock()
 
 	if s.IsEmpty() {
-		return []*model.Task{}, fmt.Errorf("Задач не обнаружено")
+		return []*model.Task{}, myErrors.ErrTasksNotFound
 	}
 
 	taggetTasks := make([]*model.Task, 0)
@@ -183,7 +181,7 @@ func (s *JSONStorage) GetByTag(tag string) ([]*model.Task, error) {
 	}
 
 	if len(taggetTasks) < 1 {
-		return taggetTasks, fmt.Errorf("Задач с таким тегом не существует")
+		return taggetTasks, myErrors.ErrTasksWithTagNotFound
 	}
 	return taggetTasks, nil
 
@@ -192,30 +190,35 @@ func (s *JSONStorage) GetByTag(tag string) ([]*model.Task, error) {
 func (s *JSONStorage) Complete(id int) error {
 
 	if s.IsEmpty() {
-		return fmt.Errorf("Список задач пуст")
+		return myErrors.ErrTasksNotFound
 	}
 
-	s.mu.Lock()
-	if id < 1 {
-		return fmt.Errorf("Неккоректный ID")
-	}
+	// if id < 1 {
+	// 	return fmt.Errorf("Неккоректный ID")
+	// }
 
-	task, exists := s.tasks[id]
-	if !exists {
-		return fmt.Errorf("Несуществующий ID")
+	// task, exists := s.tasks[id]
+	// if !exists {
+	// 	return fmt.Errorf("Несуществующий ID")
+	// }
+
+	task, err := s.GetByID(id)
+	if err != nil {
+		return myErrors.ErrIdNotExists
 	}
 
 	if task.Completed {
-		return fmt.Errorf("Задача уже выполнена")
+		return myErrors.ErrTaskAlredyComplete
 	}
 
+	s.mu.Lock()
 	completeTime := time.Now()
 	task.Completed = true
 	task.CompletedAt = &completeTime
 	s.mu.Unlock()
 
 	if err := s.saveToFile(); err != nil {
-		return fmt.Errorf("ошибка сохранения: %w", err)
+		return myErrors.ErrCantSaveTaskToJson
 	}
 	return nil
 

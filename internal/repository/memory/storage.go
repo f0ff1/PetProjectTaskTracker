@@ -104,16 +104,9 @@ func (s *Storage) GetByTag(tag string) ([]*model.Task, error) {
 }
 
 func (s *Storage) Complete(id int) error {
-	if s.IsEmpty() {
-		return fmt.Errorf("Список задач пуст")
-	}
-	if id < 1 {
-		return fmt.Errorf("Неккоректный ID")
-	}
-
-	task, exists := s.tasks[id]
-	if !exists {
-		return fmt.Errorf("Несуществующий ID")
+	task, err := s.GetByID(id)
+	if err != nil {
+		return fmt.Errorf("Ошибка: %w", err)
 	}
 
 	if task.Completed {
