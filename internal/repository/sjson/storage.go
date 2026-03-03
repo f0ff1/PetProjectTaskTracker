@@ -4,8 +4,6 @@ import (
 	myErrors "TaskTracker/errors"
 	"TaskTracker/internal/model"
 	"encoding/json"
-	"fmt"
-	"math/rand"
 	"os"
 	"sync"
 	"time"
@@ -87,24 +85,8 @@ func (s *JSONStorage) loadFromFile() error {
 
 }
 
-func (s *JSONStorage) IsEmpty() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return len(s.tasks) == 0
-}
-
-func generateDefaultName() string {
-	randNumbers := rand.Intn(10000000)
-	return fmt.Sprintf("json-exr-%07d", randNumbers)
-}
-
 func (s *JSONStorage) Add(title, description string, tags []string) (*model.Task, error) {
 	s.mu.Lock()
-
-	if title == "" {
-		title = generateDefaultName()
-	}
-
 	task := &model.Task{
 		ID:          s.nextID,
 		Title:       title,
@@ -131,10 +113,6 @@ func (s *JSONStorage) GetAll() ([]*model.Task, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if s.IsEmpty() {
-		return []*model.Task{}, myErrors.ErrTasksNotFound
-	}
-
 	tasks := make([]*model.Task, 0, len(s.tasks))
 	for _, task := range s.tasks {
 		tasks = append(tasks, task)
@@ -145,10 +123,6 @@ func (s *JSONStorage) GetAll() ([]*model.Task, error) {
 func (s *JSONStorage) GetByID(id int) (*model.Task, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
-	if s.IsEmpty() {
-		return nil, myErrors.ErrTasksNotFound
-	}
 
 	task, exists := s.tasks[id]
 	if !exists {
@@ -161,10 +135,6 @@ func (s *JSONStorage) GetByID(id int) (*model.Task, error) {
 func (s *JSONStorage) GetByTag(tag string) ([]*model.Task, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
-	if s.IsEmpty() {
-		return []*model.Task{}, myErrors.ErrTasksNotFound
-	}
 
 	taggetTasks := make([]*model.Task, 0)
 	tasks, _ := s.GetAll()
@@ -180,35 +150,19 @@ func (s *JSONStorage) GetByTag(tag string) ([]*model.Task, error) {
 
 	}
 
-	if len(taggetTasks) < 1 {
-		return taggetTasks, myErrors.ErrTasksWithTagNotFound
-	}
 	return taggetTasks, nil
 
 }
 
-func (s *JSONStorage) Complete(id int) error {
-
-	if s.IsEmpty() {
-		return myErrors.ErrTasksNotFound
-	}
-
-	// if id < 1 {
-	// 	return fmt.Errorf("Неккоректный ID")
-	// }
-
-	// task, exists := s.tasks[id]
-	// if !exists {
-	// 	return fmt.Errorf("Несуществующий ID")
-	// }
+func (s *JSONStorage) Complete(id int) (*model.Task, error) {
 
 	task, err := s.GetByID(id)
 	if err != nil {
-		return myErrors.ErrIdNotExists
+		return nil, myErrors.ErrIdNotExists
 	}
 
 	if task.Completed {
-		return myErrors.ErrTaskAlredyComplete
+		return nil, myErrors.ErrTaskAlredyComplete
 	}
 
 	s.mu.Lock()
@@ -218,8 +172,8 @@ func (s *JSONStorage) Complete(id int) error {
 	s.mu.Unlock()
 
 	if err := s.saveToFile(); err != nil {
-		return myErrors.ErrCantSaveTaskToJson
+		return nil, myErrors.ErrCantSaveTaskToJson
 	}
-	return nil
+	return task, nil
 
 }

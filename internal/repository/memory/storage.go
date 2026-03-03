@@ -1,11 +1,9 @@
 package memory
 
 import (
-	"fmt"
-	"math/rand"
-	"time"
-
+	myErrors "TaskTracker/errors"
 	"TaskTracker/internal/model"
+	"time"
 )
 
 type Storage struct {
@@ -20,19 +18,8 @@ func NewStorage() *Storage {
 	}
 }
 
-func (s *Storage) IsEmpty() bool {
-	return len(s.tasks) == 0
-}
+func (s *Storage) Add(title, desc string, tags []string) (*model.Task, error) {
 
-func generateDefaultName() string {
-	randNumbers := rand.Intn(10000000)
-	return fmt.Sprintf("exr-%07d", randNumbers)
-}
-
-func (s *Storage) Add(title, desc string, tags []string) *model.Task {
-	if title == "" {
-		title = generateDefaultName()
-	}
 	task := &model.Task{
 		ID:          s.nextID,
 		Title:       title,
@@ -44,15 +31,11 @@ func (s *Storage) Add(title, desc string, tags []string) *model.Task {
 	}
 
 	s.tasks[s.nextID] = task
-	fmt.Printf("Задаче: %s добавили тэги: %s", title, tags)
 	s.nextID++
-	return task
+	return task, nil
 }
 
 func (s *Storage) GetAll() ([]*model.Task, error) {
-	if s.IsEmpty() {
-		return []*model.Task{}, fmt.Errorf("Задач нет")
-	}
 
 	tasks := make([]*model.Task, 0, len(s.tasks))
 	for _, task := range s.tasks {
@@ -64,24 +47,16 @@ func (s *Storage) GetAll() ([]*model.Task, error) {
 }
 
 func (s *Storage) GetByID(id int) (*model.Task, error) {
-	if s.IsEmpty() {
-		return nil, fmt.Errorf("Список задач пуст")
-	}
-	if id < 1 {
-		return nil, fmt.Errorf("Неккоректный ID")
-	}
 
 	task, exists := s.tasks[id]
 	if !exists {
-		return nil, fmt.Errorf("Несуществующий ID")
+		return nil, myErrors.ErrIdNotExists
 	}
 	return task, nil
 }
 
 func (s *Storage) GetByTag(tag string) ([]*model.Task, error) {
-	if s.IsEmpty() {
-		return []*model.Task{}, fmt.Errorf("Задач не обнаружено")
-	}
+
 	taggetTasks := make([]*model.Task, 0)
 	tasks, _ := s.GetAll()
 	for _, task := range tasks {
@@ -96,26 +71,23 @@ func (s *Storage) GetByTag(tag string) ([]*model.Task, error) {
 
 	}
 
-	if len(taggetTasks) < 1 {
-		return taggetTasks, fmt.Errorf("Задач с таким тегом не существует")
-	}
 	return taggetTasks, nil
 
 }
 
-func (s *Storage) Complete(id int) error {
+func (s *Storage) Complete(id int) (*model.Task, error) {
 	task, err := s.GetByID(id)
 	if err != nil {
-		return fmt.Errorf("Ошибка: %w", err)
+		return nil, myErrors.ErrIdNotExists
 	}
 
 	if task.Completed {
-		return fmt.Errorf("Задача уже выполнена")
+		return nil, myErrors.ErrTaskAlredyComplete
 	}
 
 	completeTime := time.Now()
 	task.Completed = true
 	task.CompletedAt = &completeTime
-	return nil
+	return task, nil
 
 }

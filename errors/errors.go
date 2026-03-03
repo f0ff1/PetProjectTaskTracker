@@ -9,6 +9,8 @@ var (
 	ErrCantSaveTaskToJson   = errors.New("Не удалось сохранить ебаную таску в JSON")
 	ErrTasksNotFound        = errors.New("Нема задач вообще")
 	ErrIdNotExists          = errors.New("Несуществующий ID")
+	ErrWrongTypeID          = errors.New("Неккоректный ID")
 	ErrTasksWithTagNotFound = errors.New("Задач с таким тегом не существует")
+	ErrWrongTag             = errors.New("Неккоректный тег")
 	ErrTaskAlredyComplete   = errors.New("Задача уже выполнена")
 )

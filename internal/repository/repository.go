@@ -6,6 +6,6 @@ type Repository interface {
 	Add(title, description string, tags []string) (*model.Task, error)
 	GetAll() ([]*model.Task, error)
 	GetByID(id int) (*model.Task, error)
-	Complete(id int) error
+	Complete(id int) (*model.Task, error)
 	GetByTag(tag string) ([]*model.Task, error)
 }
