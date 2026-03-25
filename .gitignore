@@ -6,4 +6,11 @@
 # Файлы с конфигурацией
 config/config.go
 config.local.*
-*.secret
+*.secret.env
+dbconfig.env
+.env
+*.env *.env
+*.env
+*.env.*
+dbconfig.env
+dbconfig.env.*
