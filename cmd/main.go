@@ -3,24 +3,37 @@ package main
 import (
 	"fmt"
 
+	"TaskTracker/config"
 	"TaskTracker/internal/handler"
 	"TaskTracker/internal/repository"
-	"TaskTracker/internal/repository/memory"
-	"TaskTracker/internal/repository/sjson"
+	"TaskTracker/internal/repository/postgres"
 	"TaskTracker/internal/service"
 
 )
 
 func main() {
+	// var repo repository.Repository
+	// jsonRepo, err := sjson.NewJSONStorage("data/data.json")
+	// if err != nil {
+	// 	fmt.Printf("⚠️ JSON storage error: %v\n", err)
+	// 	fmt.Println("🔄 Использую in-memory хранилище")
+	// 	repo = memory.NewStorage()
+	// } else {
+	// 	repo = jsonRepo
+	// }
+
 	var repo repository.Repository
-	jsonRepo, err := sjson.NewJSONStorage("data/data.json")
+	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Printf("⚠️ JSON storage error: %v\n", err)
-		fmt.Println("🔄 Использую in-memory хранилище")
-		repo = memory.NewStorage()
-	} else {
-		repo = jsonRepo
+		panic(err)
 	}
+	dsn := cfg.GetDSN()
+	fmt.Println(dsn)
+	postgreSQLRepo, err := postgres.NewPostgresStorage(dsn)
+	if err != nil {
+		panic(err)
+	}
+	repo = postgreSQLRepo
 
 	taskService := service.NewNewTaskService(repo)
 

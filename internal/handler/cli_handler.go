@@ -276,10 +276,14 @@ func (h *CLIHandler) printTask(task *model.Task) {
 	content.WriteString("⏰ " + fieldStyle.Render("Создано:") + " " +
 		valueStyle.Render(task.CreatedAt.Format("02.01.2006 15:04:05")) + "\n")
 
-	// Строка Завершено - только если задача выполнена
-	if task.Completed {
-		content.WriteString("⏰ " + fieldStyle.Render("Завершено:") + " " +
-			valueStyle.Render(task.CompletedAt.Format("02.01.2006 15:04:05")))
+	// Строка Завершено
+	if task.CompletedAt != nil {
+		if task.Completed {
+			content.WriteString("⏰ " + fieldStyle.Render("Завершено:") + " " +
+				valueStyle.Render(task.CompletedAt.Format("02.01.2006 15:04:05")))
+		}
+	} else {
+		content.WriteString("⏰ " + fieldStyle.Render("Не завершено"))
 	}
 
 	// Оборачиваем всё в рамку

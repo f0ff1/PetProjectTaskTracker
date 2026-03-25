@@ -1,0 +1,9 @@
+# .gitignore
+.env
+.env.local
+.env.*.local
+
+# Файлы с конфигурацией
+config/config.go
+config.local.*
+*.secret
