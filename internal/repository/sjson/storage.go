@@ -1,12 +1,13 @@
 package sjson
 
 import (
-	myErrors "TaskTracker/errors"
-	"TaskTracker/internal/model"
 	"encoding/json"
 	"os"
 	"sync"
 	"time"
+
+	myErrors "TaskTracker/errors"
+	"TaskTracker/internal/model"
 )
 
 type JSONData struct {
@@ -175,5 +176,21 @@ func (s *JSONStorage) Complete(id int) (*model.Task, error) {
 		return nil, myErrors.ErrCantSaveTaskToJson
 	}
 	return task, nil
+
+}
+
+func (s *JSONStorage) DeleteByID(id int) error {
+	_, err := s.GetByID(id)
+	if err != nil {
+		return myErrors.ErrIdNotExists
+	}
+	s.mu.Lock()
+	delete(s.tasks, id)
+	s.mu.Unlock()
+
+	if err := s.saveToFile(); err != nil {
+		return myErrors.ErrCantSaveTaskToJson
+	}
+	return nil
 
 }

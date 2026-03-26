@@ -13,7 +13,7 @@ func TestTaskService_NewService(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	if svc == nil {
 		t.Fatal("NewNewTaskService() returned nil")
@@ -25,7 +25,7 @@ func TestTaskService_AddTask_WithTitle(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	title := "Test Task"
 	desc := "Test Description"
@@ -55,7 +55,7 @@ func TestTaskService_AddTask_WithoutTitle(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	task, err := svc.AddTask("", "Description", []string{})
 
@@ -79,7 +79,7 @@ func TestTaskService_AddTask_MultipleTasks(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	task1, _ := svc.AddTask("Task 1", "Desc 1", []string{})
 	task2, _ := svc.AddTask("Task 2", "Desc 2", []string{})
@@ -101,7 +101,7 @@ func TestTaskService_GetAllTasks(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	svc.AddTask("Task 1", "Desc 1", []string{})
 	svc.AddTask("Task 2", "Desc 2", []string{})
@@ -122,7 +122,7 @@ func TestTaskService_GetAllTasks_Empty(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	tasks, err := svc.GetAllTasks()
 
@@ -140,7 +140,7 @@ func TestTaskService_GetTaskById_Success(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	added, _ := svc.AddTask("Test Task", "Description", []string{})
 
@@ -164,7 +164,7 @@ func TestTaskService_GetTaskById_InvalidID(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	tests := []struct {
 		name      string
@@ -199,7 +199,7 @@ func TestTaskService_GetTaskById_NotFound(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	task, err := svc.GetTaskById(999)
 
@@ -217,7 +217,7 @@ func TestTaskService_GetTasksByTag(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	svc.AddTask("Task 1", "Desc 1", []string{"work", "urgent"})
 	svc.AddTask("Task 2", "Desc 2", []string{"personal"})
@@ -239,7 +239,7 @@ func TestTaskService_GetTasksByTag_InvalidTag(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	svc.AddTask("Task", "Description", []string{"tag"})
 
@@ -263,7 +263,7 @@ func TestTaskService_GetTasksByTag_NotFound(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	svc.AddTask("Task", "Description", []string{"tag"})
 
@@ -283,7 +283,7 @@ func TestTaskService_CompleteTask_Success(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	added, _ := svc.AddTask("Task", "Description", []string{})
 
@@ -307,7 +307,7 @@ func TestTaskService_CompleteTask_InvalidID(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	tests := []struct {
 		name      string
@@ -342,7 +342,7 @@ func TestTaskService_CompleteTask_AlreadyCompleted(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	added, _ := svc.AddTask("Task", "Description", []string{})
 
@@ -364,7 +364,7 @@ func TestTaskService_CompleteTask_NotFound(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	task, err := svc.CompleteTask(999)
 
@@ -382,7 +382,7 @@ func TestTaskService_WorkflowScenario(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	// Step 1: Добавляем несколько задач
 	task1, _ := svc.AddTask("Buy milk", "Fresh milk", []string{"shopping", "urgent"})
@@ -429,7 +429,7 @@ func TestTaskService_AddTask_WithManyTags(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	tags := []string{"tag1", "tag2", "tag3", "tag4", "tag5"}
 
@@ -457,7 +457,7 @@ func TestTaskService_AddTask_EmptyDescription(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	task, err := svc.AddTask("Task", "", []string{})
 
@@ -475,7 +475,7 @@ func TestTaskService_GetAllTasks_Order(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	task1, _ := svc.AddTask("First", "First", []string{})
 	task2, _ := svc.AddTask("Second", "Second", []string{})

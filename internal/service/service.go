@@ -1,18 +1,20 @@
 package service
 
 import (
+	"fmt"
+	"math/rand"
+
 	customError "TaskTracker/errors"
 	"TaskTracker/internal/model"
 	"TaskTracker/internal/repository"
-	"fmt"
-	"math/rand"
+
 )
 
 type TaskService struct {
 	repo repository.Repository
 }
 
-func NewNewTaskService(repo repository.Repository) *TaskService {
+func NewTaskService(repo repository.Repository) *TaskService {
 	return &TaskService{repo: repo}
 }
 
@@ -48,7 +50,18 @@ func (s *TaskService) GetTasksByTag(tag string) ([]*model.Task, error) {
 
 func (s *TaskService) CompleteTask(id int) (*model.Task, error) {
 	if id < 1 {
-		return nil, customError.ErrWrongTypeID
+		return nil, customError.ErrIdNotExists
 	}
 	return s.repo.Complete(id)
+}
+
+func (s *TaskService) DeleteTask(id int) error {
+	if id < 1 {
+		return customError.ErrIdNotExists
+	}
+	return s.repo.DeleteByID(id)
+}
+
+func (s *TaskService) GetStats() ([]string,error) {
+	return s.repo.GetStats()
 }

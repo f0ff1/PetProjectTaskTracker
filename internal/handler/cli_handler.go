@@ -66,7 +66,9 @@ func (h *CLIHandler) printMenu() {
 		menuItemStyle.Render("3. 📋 Найти задачу по ID"),
 		menuItemStyle.Render("4. 🏷️ Найти задачу по Тэгу"),
 		menuItemStyle.Render("5. ✏️ Отметить задачу как выполненную"),
-		menuItemStyle.Render("6. 🚪 Выход"),
+		menuItemStyle.Render("6. ✏️ Удалить задачу по ID"),
+		menuItemStyle.Render("7. 📋 Cтатистика ебана"),
+		menuItemStyle.Render("8. 🚪 Выход"),
 	}
 
 	content := lipgloss.JoinVertical(
@@ -88,7 +90,7 @@ func (h *CLIHandler) printMenu() {
 func (h *CLIHandler) handleChoice(choice string) bool {
 	switch choice {
 	case "1":
-		h.HandleAdd()
+		h.handleAdd()
 	case "2":
 		h.handleList()
 	case "3":
@@ -98,6 +100,10 @@ func (h *CLIHandler) handleChoice(choice string) bool {
 	case "5":
 		h.handleComplete()
 	case "6":
+		h.handleDelete()
+	case "7":
+		h.handleGetStats()
+	case "8":
 		fmt.Println("👋 До свидания!")
 		return false
 	default:
@@ -107,7 +113,7 @@ func (h *CLIHandler) handleChoice(choice string) bool {
 
 }
 
-func (h *CLIHandler) HandleAdd() {
+func (h *CLIHandler) handleAdd() {
 	fmt.Println("=======================")
 	fmt.Print("Введите название задачи: ")
 	title := h.readInput()
@@ -124,6 +130,15 @@ func (h *CLIHandler) HandleAdd() {
 		return
 	}
 	fmt.Printf("\n✅ Задача '%s' добавлена с ID %d\n", task.Title, task.ID)
+}
+
+func (h *CLIHandler) handleDelete() {
+	id := h.readID()
+	err := h.service.DeleteTask(id)
+	if err != nil {
+		fmt.Println("❌ Ошибка: ", err)
+		return
+	}
 }
 
 func (h *CLIHandler) handleList() {
@@ -185,6 +200,18 @@ func (h *CLIHandler) handleComplete() {
 	}
 	fmt.Printf("✅ Задача '%s' отмечена как выполненная\n", task.Title)
 
+}
+
+func (h *CLIHandler) handleGetStats() {
+	fmt.Println("Попалась собака")
+	data, err := h.service.GetStats()
+	fmt.Println(len(data))
+	if err != nil {
+		fmt.Println("ЗАЛУПА")
+	}
+	for _, item := range data {
+		fmt.Println(item)
+	}
 }
 
 // Всякая доп хуйня

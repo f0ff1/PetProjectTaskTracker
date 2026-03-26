@@ -1,15 +1,6 @@
 {
- "next_id": 5,
+ "next_id": 7,
  "tasks": {
-  "1": {
-   "ID": 1,
-   "Title": "def-name-exr-3607952",
-   "Description": "",
-   "Completed": true,
-   "CreatedAt": "2026-03-03T20:47:57.1134949+03:00",
-   "CompletedAt": "2026-03-03T20:59:32.0189978+03:00",
-   "Tags": []
-  },
   "2": {
    "ID": 2,
    "Title": "Задача 1",
@@ -23,26 +14,30 @@
     "хуй"
    ]
   },
-  "3": {
-   "ID": 3,
-   "Title": "def-name-exr-3499877",
-   "Description": "хз хз",
-   "Completed": false,
-   "CreatedAt": "2026-03-03T21:07:10.2054339+03:00",
-   "CompletedAt": null,
-   "Tags": [
-    "дай",
-    "хуй",
-    "тебя",
-    "знает"
-   ]
-  },
   "4": {
    "ID": 4,
    "Title": "def-name-exr-3653752",
    "Description": "",
    "Completed": false,
    "CreatedAt": "2026-03-03T21:18:28.7398779+03:00",
+   "CompletedAt": null,
+   "Tags": []
+  },
+  "5": {
+   "ID": 5,
+   "Title": "def-name-exr-7180570",
+   "Description": "",
+   "Completed": false,
+   "CreatedAt": "2026-03-25T19:40:41.1188852+03:00",
+   "CompletedAt": null,
+   "Tags": []
+  },
+  "6": {
+   "ID": 6,
+   "Title": "def-name-exr-3003150",
+   "Description": "",
+   "Completed": false,
+   "CreatedAt": "2026-03-26T13:26:12.6317942+03:00",
    "CompletedAt": null,
    "Tags": []
   }

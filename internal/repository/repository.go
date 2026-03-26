@@ -8,4 +8,6 @@ type Repository interface {
 	GetByID(id int) (*model.Task, error)
 	Complete(id int) (*model.Task, error)
 	GetByTag(tag string) ([]*model.Task, error)
+	DeleteByID(id int) error
+	GetStats() ([]string, error)
 }

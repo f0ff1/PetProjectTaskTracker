@@ -2,12 +2,14 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	myErrors "TaskTracker/errors"
 	"TaskTracker/internal/model"
+
 )
 
 type PostgresStorage struct {
@@ -76,6 +78,20 @@ func (s *PostgresStorage) Add(title, desc string, tags []string) (*model.Task, e
 
 	return &task, nil
 
+}
+
+func (s *PostgresStorage) DeleteByID(id int) error {
+	deleteQuery := `DELETE FROM tasks where id = $1`
+	row, err := s.dbPool.Exec(context.Background(), deleteQuery, id)
+	if err != nil {
+		return err
+	}
+
+	if row.RowsAffected() == 0 {
+		fmt.Println(myErrors.ErrIdNotExists)
+	}
+
+	return nil
 }
 
 func (s *PostgresStorage) GetAll() ([]*model.Task, error) {
@@ -192,4 +208,29 @@ func (s *PostgresStorage) Complete(id int) (*model.Task, error) {
 		return nil, myErrors.ErrCantReadTable
 	}
 	return &task, nil
+}
+
+func (s *PostgresStorage) GetStats() ([]string, error) {
+	getStatsQuery := `SELECT tag, COUNT(*) as usage_count FROM (SELECT unnest(tags) as tag FROM tasks) WHERE tag IS NOT NULL GROUP BY tag ORDER BY usage_count DESC LIMIT 3`
+
+	rows, err := s.dbPool.Query(context.Background(), getStatsQuery)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var dataStats []string
+
+	for rows.Next() {
+		var tag string
+		var usageCount int
+
+		if err := rows.Scan(&tag, &usageCount); err != nil {
+			return nil, err
+		}
+		dataStats = append(dataStats, fmt.Sprintf("Тег: %s | Количество: %d", tag, usageCount))
+	}
+
+	return dataStats, nil
+
 }

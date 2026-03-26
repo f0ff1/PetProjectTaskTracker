@@ -14,7 +14,7 @@ func TestCLIHandler_Creation(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	if h == nil {
@@ -27,7 +27,7 @@ func TestCLIHandler_ParseTags_SingleTag(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	// Проверяем что handler может быть создан и использован
@@ -41,7 +41,7 @@ func TestCLIHandler_ParseTags_CommaSeparated(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	// Проверяем что handler стабилен при обработке
@@ -55,7 +55,7 @@ func TestCLIHandler_ParseTags_SpaceSeparated(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	if h == nil {
@@ -68,7 +68,7 @@ func TestCLIHandler_ParseTags_SemicolonSeparated(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	if h == nil {
@@ -81,7 +81,7 @@ func TestCLIHandler_ParseTags_PipeSeparated(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	if h == nil {
@@ -94,7 +94,7 @@ func TestCLIHandler_ParseTags_MixedSeparators(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	if h == nil {
@@ -107,7 +107,7 @@ func TestCLIHandler_ParseTags_Empty(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	if h == nil {
@@ -120,7 +120,7 @@ func TestCLIHandler_ParseTags_Whitespace(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	if h == nil {
@@ -133,7 +133,7 @@ func TestCLIHandler_ReadInput_SimpleInput(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	// Невозможно прямо тестировать readInput, так как он приватный
 	// и работает с bufio.Reader, но мы проверяем что handler создается корректно
@@ -149,7 +149,7 @@ func TestCLIHandler_Service_Integration(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	// Добавляем данные через сервис
@@ -176,7 +176,7 @@ func TestCLIHandler_ErrorHandling(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	// Проверяем что handler корректно обрабатывает ошибки из сервиса
@@ -196,7 +196,7 @@ func TestCLIHandler_MultipleOperations(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	// Операция 1: Добавляем задачу
@@ -261,7 +261,7 @@ func TestCLIHandler_StringValidation(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	testCases := []struct {
@@ -301,7 +301,7 @@ func TestCLIHandler_ConcurrentOperations(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	const numGoroutines = 10
@@ -337,7 +337,7 @@ func TestCLIHandler_TagProcessing(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	// Добавляем задачи с разными тегами
@@ -370,7 +370,7 @@ func TestCLIHandler_TaskCompletion(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	// Добавляем задачу
@@ -405,7 +405,7 @@ func TestCLIHandler_WorkflowWithHandler(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	// Полный workflow: добавление товаров, поиск, завершение
@@ -445,7 +445,7 @@ func TestCLIHandler_RepositoryIntegration(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
 	// Добавляем через сервис
@@ -472,7 +472,7 @@ func TestCLIHandler_Stability(t *testing.T) {
 	t.Parallel()
 
 	repo := memory.NewStorage()
-	svc := service.NewNewTaskService(repo)
+	svc := service.NewTaskService(repo)
 
 	// Создаем много handlers с одним сервисом
 	handlers := make([]*handler.CLIHandler, 10)

@@ -1,10 +1,11 @@
 package memory
 
 import (
-	myErrors "TaskTracker/errors"
-	"TaskTracker/internal/model"
 	"sync"
 	"time"
+
+	myErrors "TaskTracker/errors"
+	"TaskTracker/internal/model"
 )
 
 type Storage struct {
@@ -102,4 +103,17 @@ func (s *Storage) Complete(id int) (*model.Task, error) {
 	task.CompletedAt = &completeTime
 	return task, nil
 
+}
+
+func (s *Storage) DeleteByID(id int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, exists := s.tasks[id]
+	if !exists {
+		return myErrors.ErrIdNotExists
+	}
+
+	delete(s.tasks, id)
+	return nil
 }
