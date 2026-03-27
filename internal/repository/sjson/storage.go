@@ -15,15 +15,15 @@ type JSONData struct {
 	Tasks  map[int]*model.Task `json:"tasks"`
 }
 
-type JSONStorage struct {
+type JSONRepo struct {
 	filePath string
 	tasks    map[int]*model.Task
 	nextID   int
 	mu       sync.RWMutex
 }
 
-func NewJSONStorage(path string) (*JSONStorage, error) {
-	storage := &JSONStorage{
+func NewJSONRepo(path string) (*JSONRepo, error) {
+	storage := &JSONRepo{
 		filePath: path,
 		tasks:    make(map[int]*model.Task),
 		nextID:   1,
@@ -44,16 +44,16 @@ func NewJSONStorage(path string) (*JSONStorage, error) {
 	return storage, nil
 }
 
-func (s *JSONStorage) saveToFile() error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (jR *JSONRepo) saveToFile() error {
+	jR.mu.RLock()
+	defer jR.mu.RUnlock()
 
 	data := JSONData{
-		NextID: s.nextID,
-		Tasks:  s.tasks,
+		NextID: jR.nextID,
+		Tasks:  jR.tasks,
 	}
 
-	file, err := os.Create(s.filePath)
+	file, err := os.Create(jR.filePath)
 	if err != nil {
 		return myErrors.ErrWrongPath
 	}
@@ -64,11 +64,11 @@ func (s *JSONStorage) saveToFile() error {
 	return encoder.Encode(data)
 }
 
-func (s *JSONStorage) loadFromFile() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (jR *JSONRepo) loadFromFile() error {
+	jR.mu.Lock()
+	defer jR.mu.Unlock()
 
-	file, err := os.Open(s.filePath)
+	file, err := os.Open(jR.filePath)
 	if err != nil {
 		return myErrors.ErrCantReadJsonData
 	}
@@ -80,16 +80,16 @@ func (s *JSONStorage) loadFromFile() error {
 		return err
 	}
 
-	s.nextID = data.NextID
-	s.tasks = data.Tasks
+	jR.nextID = data.NextID
+	jR.tasks = data.Tasks
 	return nil
 
 }
 
-func (s *JSONStorage) Add(title, description string, tags []string) (*model.Task, error) {
-	s.mu.Lock()
+func (jR *JSONRepo) Add(title, description string, tags []string) (*model.Task, error) {
+	jR.mu.Lock()
 	task := &model.Task{
-		ID:          s.nextID,
+		ID:          jR.nextID,
 		Title:       title,
 		Description: description,
 		Completed:   false,
@@ -98,11 +98,11 @@ func (s *JSONStorage) Add(title, description string, tags []string) (*model.Task
 		Tags:        tags,
 	}
 
-	s.tasks[s.nextID] = task
-	s.nextID++
-	s.mu.Unlock()
+	jR.tasks[jR.nextID] = task
+	jR.nextID++
+	jR.mu.Unlock()
 
-	if err := s.saveToFile(); err != nil {
+	if err := jR.saveToFile(); err != nil {
 		return nil, myErrors.ErrCantSaveTaskToJson
 	}
 
@@ -110,22 +110,22 @@ func (s *JSONStorage) Add(title, description string, tags []string) (*model.Task
 
 }
 
-func (s *JSONStorage) GetAll() ([]*model.Task, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (jR *JSONRepo) GetAll() ([]*model.Task, error) {
+	jR.mu.RLock()
+	defer jR.mu.RUnlock()
 
-	tasks := make([]*model.Task, 0, len(s.tasks))
-	for _, task := range s.tasks {
+	tasks := make([]*model.Task, 0, len(jR.tasks))
+	for _, task := range jR.tasks {
 		tasks = append(tasks, task)
 	}
 	return tasks, nil
 }
 
-func (s *JSONStorage) GetByID(id int) (*model.Task, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (jR *JSONRepo) GetByID(id int) (*model.Task, error) {
+	jR.mu.RLock()
+	defer jR.mu.RUnlock()
 
-	task, exists := s.tasks[id]
+	task, exists := jR.tasks[id]
 	if !exists {
 		return nil, myErrors.ErrIdNotExists
 	}
@@ -133,12 +133,12 @@ func (s *JSONStorage) GetByID(id int) (*model.Task, error) {
 
 }
 
-func (s *JSONStorage) GetByTag(tag string) ([]*model.Task, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (jR *JSONRepo) GetByTag(tag string) ([]*model.Task, error) {
+	jR.mu.RLock()
+	defer jR.mu.RUnlock()
 
 	taggetTasks := make([]*model.Task, 0)
-	tasks, _ := s.GetAll()
+	tasks, _ := jR.GetAll()
 	for _, task := range tasks {
 		taskTags := task.Tags
 		tagsMap := make(map[string]bool)
@@ -155,9 +155,9 @@ func (s *JSONStorage) GetByTag(tag string) ([]*model.Task, error) {
 
 }
 
-func (s *JSONStorage) Complete(id int) (*model.Task, error) {
+func (jR *JSONRepo) Complete(id int) (*model.Task, error) {
 
-	task, err := s.GetByID(id)
+	task, err := jR.GetByID(id)
 	if err != nil {
 		return nil, myErrors.ErrIdNotExists
 	}
@@ -166,29 +166,29 @@ func (s *JSONStorage) Complete(id int) (*model.Task, error) {
 		return nil, myErrors.ErrTaskAlredyComplete
 	}
 
-	s.mu.Lock()
+	jR.mu.Lock()
 	completeTime := time.Now()
 	task.Completed = true
 	task.CompletedAt = &completeTime
-	s.mu.Unlock()
+	jR.mu.Unlock()
 
-	if err := s.saveToFile(); err != nil {
+	if err := jR.saveToFile(); err != nil {
 		return nil, myErrors.ErrCantSaveTaskToJson
 	}
 	return task, nil
 
 }
 
-func (s *JSONStorage) DeleteByID(id int) error {
-	_, err := s.GetByID(id)
+func (jR *JSONRepo) DeleteByID(id int) error {
+	_, err := jR.GetByID(id)
 	if err != nil {
 		return myErrors.ErrIdNotExists
 	}
-	s.mu.Lock()
-	delete(s.tasks, id)
-	s.mu.Unlock()
+	jR.mu.Lock()
+	delete(jR.tasks, id)
+	jR.mu.Unlock()
 
-	if err := s.saveToFile(); err != nil {
+	if err := jR.saveToFile(); err != nil {
 		return myErrors.ErrCantSaveTaskToJson
 	}
 	return nil

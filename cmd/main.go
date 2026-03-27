@@ -2,105 +2,83 @@ package main
 
 import (
 	"fmt"
-	"os"
-
-	"github.com/urfave/cli/v2"
 
 	"TaskTracker/config"
+	myerrors "TaskTracker/errors"
+	"TaskTracker/factory"
 	"TaskTracker/internal/handler"
-	"TaskTracker/internal/repository"
-	"TaskTracker/internal/repository/postgres"
 	"TaskTracker/internal/service"
 
 )
 
 func main() {
-	app := &cli.App{
-		Name:    "Task Tracker",
-		Usage:   "Пет-проект по добавлению задач с разной реализацией хранилища",
-		Version: "4.0",
-		Authors: []*cli.Author{
-			{
-				Name: "Андрей Кантур",
-			},
-		},
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:    "storage",
-				Aliases: []string{"st"},
-				Value:   "postgres",
-				Usage:   "Вид хранилища (memory, json, postgres)",
-			},
-			&cli.StringFlag{
-				Name:    "json-path",
-				Aliases: []string{"j"},
-				Value:   "C:/GoLand/GoCourse/TaskTracker/data/data.json",
-				Usage:   "Путь к JSON файлу (для json хранилища)",
-			},
-		},
-		Action: func(c *cli.Context) error {
-			requestedStorageType := c.String("storage")
-			// jsonPath := c.String("json-path")
-			var repo repository.Repository
-			var usedStorage string
-
-			switch requestedStorageType {
-			case "postgres":
-				cfg, configErr := config.LoadConfig()
-				if configErr != nil {
-					fmt.Printf("❌ Ошибка загрузки конфига PostgreSQL: %v\n", configErr)
-				}
-				dsn := cfg.GetDSN()
-				fmt.Printf("🔌 Подключение к PostgreSQL: %s\n", dsn)
-				pgRepo, pgErr := postgres.NewPostgresStorage(dsn)
-				if pgErr != nil {
-					fmt.Printf("❌ Ошибка подключения к PostgreSQL: %v\n", pgErr)
-					goto tryJSON
-				}
-				repo = pgRepo
-				usedStorage = "PostgreSQL"
-				fmt.Println("✅ PostgreSQL хранилище инициализировано")
-				break
-
-			tryJSON:
-				fallthrough
-
-			case "json":
-				// fmt.Printf("📁 Попытка использовать JSON файл: %s\n", jsonPath)
-				// jsonRepo, jsonErr := sjson.NewJSONStorage(jsonPath)
-				// if jsonErr != nil {
-				// 	fmt.Printf("❌ Ошибка JSON хранилища: %v\n", jsonErr)
-				// 	goto tryMemory
-				// }
-				// repo = jsonRepo
-				// usedStorage = "JSON"
-				fmt.Println("✅ JSON хранилище инициализировано")
-				break
-
-			// tryMemory:
-			// 	fallthrough
-			case "memory":
-				// repo = memory.NewStorage()
-				// usedStorage = "in-memory"
-				fmt.Println("✅ In-memory хранилище инициализировано")
-			default:
-				return fmt.Errorf("неизвестный тип хранилища: %s (доступные: postgres, json, memory)", requestedStorageType)
-			}
-			if requestedStorageType != usedStorage {
-				fmt.Printf("⚠️ ВНИМАНИЕ: Запрошено хранилище '%s', но используется '%s'\n", requestedStorageType, usedStorage)
-			}
-			taskService := service.NewTaskService(repo)
-			cliHandler := handler.NewCLIHandler(taskService)
-
-			fmt.Printf("🚀 TaskTracker запущен с хранилищем: %s\n", usedStorage)
-			cliHandler.Run()
-
-			return nil
-		},
+	readyHandler := getReadyHandler()
+	if readyHandler == nil {
+		panic(myerrors.ErrWrongTypeRepo)
+	} else {
+		readyHandler.Run()
 	}
 
-	err := app.Run(os.Args)
+}
+
+func getReadyHandler() interface{ Run() } {
+	if handler := tryPostgres(); handler != nil {
+		return handler
+	}
+
+	if handler := tryJSON(); handler != nil {
+		return handler
+	}
+
+	return tryInMemory()
+}
+
+func tryInMemory() interface{ Run() } {
+	fmt.Println("💾 Использую In-Memory хранилище")
+	svc, err := factory.CreateTaskService(factory.InMemory, "", "")
 	if err != nil {
-		panic(err)
+		fmt.Printf("❌ Ошибка создания In-Memory: %v\n", err)
+		return nil
 	}
+	if memSvc, ok := svc.(*service.TaskService); ok {
+		return handler.NewCLIHandler(memSvc)
+	}
+	return nil
+}
+
+func tryJSON() interface{ Run() } {
+	jsonPath := "C:/GoLand/GoCourse/TaskTracker/data/data.json"
+	fmt.Printf("📁 Пробую использовать JSON файл: %s\n", jsonPath)
+	svc, err := factory.CreateTaskService(factory.JSON, "", jsonPath)
+	if err != nil {
+		fmt.Printf("⚠️ Ошибка загрузки JSON: %v\n", err)
+		return nil
+	}
+	if jsonSvc, ok := svc.(*service.TaskService); ok {
+		fmt.Println("✅ Использую JSON хранилище")
+		return handler.NewCLIHandler(jsonSvc)
+	}
+
+	return nil
+}
+
+func tryPostgres() interface{ Run() } {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		fmt.Printf("⚠️ Не удалось загрузить конфиг PostgreSQL: %v\n", err)
+		return nil
+	}
+	dsn := cfg.GetDSN()
+	fmt.Printf("🔌 Подключение к PostgreSQL: %s\n", dsn)
+	svc, err := factory.CreateTaskService(factory.Postgres, dsn, "")
+	if err != nil {
+		fmt.Printf("⚠️ Ошибка подключения к PostgreSQL: %v\n", err)
+		return nil
+	}
+
+	if pgSvc, ok := svc.(*service.PostgresTaskService); ok {
+		fmt.Println("✅ Использую PostgreSQL хранилище")
+		return handler.NewPostgresCLIHandler(pgSvc)
+	}
+	return nil
 }

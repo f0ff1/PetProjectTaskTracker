@@ -14,14 +14,26 @@ import (
 )
 
 type CLIHandler struct {
-	service *service.TaskService
-	reader  *bufio.Reader
+	baseService *service.TaskService
+	pgService   *service.PostgresTaskService
+	reader      *bufio.Reader
 }
 
+// Конструктор для базового сервиса (in-memory, JSON)
 func NewCLIHandler(service *service.TaskService) *CLIHandler {
 	return &CLIHandler{
-		service: service,
-		reader:  bufio.NewReader(os.Stdin),
+		baseService: service,
+		pgService:   nil,
+		reader:      bufio.NewReader(os.Stdin),
+	}
+}
+
+// Конструктор для PostgreSQL сервиса
+func NewPostgresCLIHandler(service *service.PostgresTaskService) *CLIHandler {
+	return &CLIHandler{
+		baseService: service.TaskService,
+		pgService:   service,
+		reader:      bufio.NewReader(os.Stdin),
 	}
 }
 
@@ -37,9 +49,6 @@ func (h *CLIHandler) Run() {
 }
 
 func (h *CLIHandler) printMenu() {
-	// Просто используем фиксированную ширину, без центрирования
-	// Но с красивым оформлением
-
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("205")).
@@ -66,10 +75,17 @@ func (h *CLIHandler) printMenu() {
 		menuItemStyle.Render("3. 📋 Найти задачу по ID"),
 		menuItemStyle.Render("4. 🏷️ Найти задачу по Тэгу"),
 		menuItemStyle.Render("5. ✏️ Отметить задачу как выполненную"),
-		menuItemStyle.Render("6. ✏️ Удалить задачу по ID"),
-		menuItemStyle.Render("7. 📋 Cтатистика ебана"),
-		menuItemStyle.Render("8. 🚪 Выход"),
 	}
+
+	// Добавляем пункты меню, которые доступны только для PostgreSQL
+	if h.pgService != nil {
+		menuItems = append(menuItems,
+			menuItemStyle.Render("6. 🗑️ Удалить задачу по ID"),
+			menuItemStyle.Render("7. 📊 Статистика"),
+		)
+	}
+
+	menuItems = append(menuItems, menuItemStyle.Render("8. 🚪 Выход"))
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Center,
@@ -82,7 +98,6 @@ func (h *CLIHandler) printMenu() {
 			Render("⚡ Выберите действие:"),
 	)
 
-	// Просто печатаем красивое меню без центрирования
 	fmt.Println(borderStyle.Render(content))
 	fmt.Print(" ")
 }
@@ -100,17 +115,26 @@ func (h *CLIHandler) handleChoice(choice string) bool {
 	case "5":
 		h.handleComplete()
 	case "6":
-		h.handleDelete()
+		// Удаление доступно только для PostgreSQL
+		if h.pgService != nil {
+			h.handleDelete()
+		} else {
+			fmt.Println("❌ Удаление задач недоступно для этого типа хранилища")
+		}
 	case "7":
-		h.handleGetStats()
+		// Статистика доступна только для PostgreSQL
+		if h.pgService != nil {
+			h.handleGetStats()
+		} else {
+			fmt.Println("❌ Статистика недоступна для этого типа хранилища")
+		}
 	case "8":
 		fmt.Println("👋 До свидания!")
 		return false
 	default:
-		fmt.Println("❌ Неверный пункт. Введите 1-6")
+		fmt.Println("❌ Неверный пункт. Введите 1-8")
 	}
 	return true
-
 }
 
 func (h *CLIHandler) handleAdd() {
@@ -124,7 +148,7 @@ func (h *CLIHandler) handleAdd() {
 	fmt.Print("Введите теги (через запятую/пробел): ")
 	tags := h.parseTags(h.readInput())
 
-	task, err := h.service.AddTask(title, description, tags)
+	task, err := h.baseService.AddTask(title, description, tags)
 	if err != nil {
 		fmt.Printf("❌ Ошибка: %v\n", err)
 		return
@@ -134,15 +158,16 @@ func (h *CLIHandler) handleAdd() {
 
 func (h *CLIHandler) handleDelete() {
 	id := h.readID()
-	err := h.service.DeleteTask(id)
+	err := h.pgService.DeleteTask(id)
 	if err != nil {
 		fmt.Println("❌ Ошибка: ", err)
 		return
 	}
+	fmt.Printf("✅ Задача с ID %d удалена\n", id)
 }
 
 func (h *CLIHandler) handleList() {
-	tasks, err := h.service.GetAllTasks()
+	tasks, err := h.baseService.GetAllTasks()
 	if err != nil {
 		fmt.Println("❌ Ошибка: ", err)
 		return
@@ -161,7 +186,7 @@ func (h *CLIHandler) handleList() {
 func (h *CLIHandler) handleFindById() {
 	id := h.readID()
 
-	task, err := h.service.GetTaskById(id)
+	task, err := h.baseService.GetTaskById(id)
 	if err != nil {
 		fmt.Printf("❌ Ошибка: %v\n", err)
 		return
@@ -174,7 +199,7 @@ func (h *CLIHandler) handleFineByTag() {
 	fmt.Print("Введите тег для поиска: ")
 	tag := strings.TrimSpace(h.readInput())
 
-	tasks, err := h.service.GetTasksByTag(tag)
+	tasks, err := h.baseService.GetTasksByTag(tag)
 	if err != nil {
 		fmt.Printf("❌ Ошибка: %v\n", err)
 		return
@@ -193,25 +218,31 @@ func (h *CLIHandler) handleFineByTag() {
 func (h *CLIHandler) handleComplete() {
 	id := h.readID()
 
-	task, err := h.service.CompleteTask(id)
+	task, err := h.baseService.CompleteTask(id)
 	if err != nil {
 		fmt.Printf("❌ Ошибка: %v\n", err)
 		return
 	}
 	fmt.Printf("✅ Задача '%s' отмечена как выполненная\n", task.Title)
-
 }
 
 func (h *CLIHandler) handleGetStats() {
-	fmt.Println("Попалась собака")
-	data, err := h.service.GetStats()
-	fmt.Println(len(data))
+	stats, err := h.pgService.GetStats()
 	if err != nil {
-		fmt.Println("ЗАЛУПА")
+		fmt.Printf("❌ Ошибка при получении статистики: %v\n", err)
+		return
 	}
-	for _, item := range data {
-		fmt.Println(item)
+
+	if len(stats) == 0 {
+		fmt.Println("📊 Статистика недоступна или нет данных")
+		return
 	}
+
+	fmt.Println("\n📊 ТОП-3 ПОПУЛЯРНЫХ ТЕГА:")
+	for i, stat := range stats {
+		fmt.Printf("  %d. %s\n", i+1, stat)
+	}
+	fmt.Println()
 }
 
 // Всякая доп хуйня
@@ -243,17 +274,17 @@ var (
 	borderStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("63")).
-			Padding(0, 2). // Уменьшил паддинг до 0 сверху/снизу
-			Width(60)      // Уменьшил ширину
+			Padding(0, 2).
+			Width(60)
 
 	headerStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("205")).
-			MarginBottom(1) // Добавил отступ после заголовка
+			MarginBottom(1)
 
 	fieldStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("39")).
-			Width(12) // Фиксированная ширина для поля
+			Width(12)
 
 	valueStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("255"))
@@ -264,46 +295,29 @@ func (h *CLIHandler) printTask(task *model.Task) {
 	if task.Completed {
 		status = "✅ - Выполнена"
 	}
-	// fmt.Println("``````````````````````````````````````````````````````````````````````````````````")
-	// fmt.Printf("📂 ID: %d | ✏️ Название: %s | 🔄 Статус: %s\n", task.ID, task.Title, status)
-	// fmt.Printf("📝 Описание: %s\n🏷️ Тэги: %s\n", task.Description, task.Tags)
-	// fmt.Printf("⏰ Время создания: %s\n", task.CreatedAt.Format("02.01.2006 15:04:05"))
-	// if task.Completed {
-	// 	fmt.Printf("⏰ Время завершения: %s\n", task.CompletedAt.Format("02.01.2006 15:04:05"))
-	// }
-	// fmt.Println("``````````````````````````````````````````````````````````````````````````````````")
 
-	// Собираем содержимое построчно
 	content := strings.Builder{}
 
-	// Заголовок
 	content.WriteString(headerStyle.Render("📋 ДЕТАЛИ ЗАДАЧИ") + "\n\n")
 
-	// Строка ID - эмодзи отдельно, значение с fieldStyle
 	content.WriteString("📂 " + fieldStyle.Render("ID:") + " " +
 		valueStyle.Render(fmt.Sprintf("%d", task.ID)) + "\n")
 
-	// Строка Названия
 	content.WriteString("✏️ " + fieldStyle.Render("Название:") + " " +
 		valueStyle.Render(task.Title) + "\n")
 
-	// Строка Статуса
 	content.WriteString("🔄 " + fieldStyle.Render("Статус:") + " " +
 		valueStyle.Render(status) + "\n")
 
-	// Строка Описания
 	content.WriteString("📝 " + fieldStyle.Render("Описание:") + " " +
 		valueStyle.Render(task.Description) + "\n")
 
-	// Строка Тэгов
 	content.WriteString("🏷️ " + fieldStyle.Render("Тэги:") + " " +
 		valueStyle.Render(fmt.Sprintf("%v", task.Tags)) + "\n")
 
-	// Строка Создано
 	content.WriteString("⏰ " + fieldStyle.Render("Создано:") + " " +
 		valueStyle.Render(task.CreatedAt.Format("02.01.2006 15:04:05")) + "\n")
 
-	// Строка Завершено
 	if task.CompletedAt != nil {
 		if task.Completed {
 			content.WriteString("⏰ " + fieldStyle.Render("Завершено:") + " " +
@@ -313,7 +327,6 @@ func (h *CLIHandler) printTask(task *model.Task) {
 		content.WriteString("⏰ " + fieldStyle.Render("Не завершено"))
 	}
 
-	// Оборачиваем всё в рамку
 	boxedContent := borderStyle.Render(content.String())
 	fmt.Println(boxedContent)
 }

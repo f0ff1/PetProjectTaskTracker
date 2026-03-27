@@ -16,7 +16,7 @@ func TestIntegration_MemoryRepository_Service_Handler(t *testing.T) {
 	t.Parallel()
 
 	// Инициализируем компоненты
-	repo := memory.NewStorage()
+	repo := memory.NewInMemoryRepo()
 	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
@@ -74,7 +74,7 @@ func TestIntegration_JSONRepository_Service_Handler(t *testing.T) {
 	os.Remove(tmpFile.Name())
 
 	// Инициализируем компоненты с JSON хранилищем
-	repo, err := sjson.NewJSONStorage(tmpFile.Name())
+	repo, err := sjson.NewJSONRepo(tmpFile.Name())
 	if err != nil {
 		t.Fatalf("NewJSONStorage failed: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestIntegration_JSONRepository_Service_Handler(t *testing.T) {
 	_ = h
 
 	// Создаем новый repo из файла (загружаем сохраненные данные)
-	repo2, err := sjson.NewJSONStorage(tmpFile.Name())
+	repo2, err := sjson.NewJSONRepo(tmpFile.Name())
 	if err != nil {
 		t.Fatalf("NewJSONStorage failed: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestIntegration_JSONRepository_Service_Handler(t *testing.T) {
 func TestIntegration_MultipleServices(t *testing.T) {
 	t.Parallel()
 
-	repo := memory.NewStorage()
+	repo := memory.NewInMemoryRepo()
 
 	// Создаем два сервиса с одним хранилищем
 	svc1 := service.NewTaskService(repo)
@@ -154,7 +154,7 @@ func TestIntegration_MultipleServices(t *testing.T) {
 func TestIntegration_ComplexWorkflow(t *testing.T) {
 	t.Parallel()
 
-	repo := memory.NewStorage()
+	repo := memory.NewInMemoryRepo()
 	svc := service.NewTaskService(repo)
 	h := handler.NewCLIHandler(svc)
 
@@ -253,7 +253,7 @@ func TestIntegration_JSONPersistence(t *testing.T) {
 
 	// Фаза 1: Создание и добавление данных
 	{
-		repo, _ := sjson.NewJSONStorage(filePath)
+		repo, _ := sjson.NewJSONRepo(filePath)
 		svc := service.NewTaskService(repo)
 
 		svc.AddTask("Task 1", "Description 1", []string{"tag1"})
@@ -271,7 +271,7 @@ func TestIntegration_JSONPersistence(t *testing.T) {
 
 	// Фаза 2: Загрузка данных из файла
 	{
-		repo, _ := sjson.NewJSONStorage(filePath)
+		repo, _ := sjson.NewJSONRepo(filePath)
 		svc := service.NewTaskService(repo)
 
 		tasks, _ := svc.GetAllTasks()
@@ -295,7 +295,7 @@ func TestIntegration_JSONPersistence(t *testing.T) {
 func TestIntegration_ConcurrentOperations(t *testing.T) {
 	t.Parallel()
 
-	repo := memory.NewStorage()
+	repo := memory.NewInMemoryRepo()
 	svc := service.NewTaskService(repo)
 
 	const numGoroutines = 50
@@ -332,7 +332,7 @@ func TestIntegration_ConcurrentOperations(t *testing.T) {
 func TestIntegration_ServiceWithDifferentStorages(t *testing.T) {
 	t.Parallel()
 
-	memRepo := memory.NewStorage()
+	memRepo := memory.NewInMemoryRepo()
 	memSvc := service.NewTaskService(memRepo)
 
 	// Добавляем в Memory
@@ -350,7 +350,7 @@ func TestIntegration_ServiceWithDifferentStorages(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 	os.Remove(tmpFile.Name())
 
-	jsonRepo, err := sjson.NewJSONStorage(tmpFile.Name())
+	jsonRepo, err := sjson.NewJSONRepo(tmpFile.Name())
 	if err != nil {
 		t.Fatalf("NewJSONStorage failed: %v", err)
 	}
@@ -389,7 +389,7 @@ func TestIntegration_FullApplicationSimulation(t *testing.T) {
 
 	// Запускаем приложение (первый раз)
 	{
-		repo, _ := sjson.NewJSONStorage(filePath)
+		repo, _ := sjson.NewJSONRepo(filePath)
 		svc := service.NewTaskService(repo)
 		h := handler.NewCLIHandler(svc)
 
@@ -405,7 +405,7 @@ func TestIntegration_FullApplicationSimulation(t *testing.T) {
 
 	// Перезапускаем приложение (данные должны загрузиться)
 	{
-		repo, _ := sjson.NewJSONStorage(filePath)
+		repo, _ := sjson.NewJSONRepo(filePath)
 		svc := service.NewTaskService(repo)
 		h := handler.NewCLIHandler(svc)
 
@@ -437,7 +437,7 @@ func TestIntegration_FullApplicationSimulation(t *testing.T) {
 
 	// Третий запуск - проверяем что статус сохранился
 	{
-		repo, _ := sjson.NewJSONStorage(filePath)
+		repo, _ := sjson.NewJSONRepo(filePath)
 		svc := service.NewTaskService(repo)
 
 		task1, _ := svc.GetTaskById(1)
@@ -454,7 +454,7 @@ func TestIntegration_FullApplicationSimulation(t *testing.T) {
 
 // TestIntegration_LargeDataSet проверяет работу с большим количеством данных
 func TestIntegration_LargeDataSet(t *testing.T) {
-	repo := memory.NewStorage()
+	repo := memory.NewInMemoryRepo()
 	svc := service.NewTaskService(repo)
 
 	const numberOfTasks = 1000

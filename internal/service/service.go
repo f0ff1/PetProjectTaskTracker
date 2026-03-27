@@ -7,7 +7,6 @@ import (
 	customError "TaskTracker/errors"
 	"TaskTracker/internal/model"
 	"TaskTracker/internal/repository"
-
 )
 
 type TaskService struct {
@@ -55,13 +54,22 @@ func (s *TaskService) CompleteTask(id int) (*model.Task, error) {
 	return s.repo.Complete(id)
 }
 
-func (s *TaskService) DeleteTask(id int) error {
+type PostgresTaskService struct {
+	*TaskService
+	repo repository.PostgresRepository
+}
+
+func NewPostgresTaskService(repo repository.PostgresRepository) *PostgresTaskService {
+	return &PostgresTaskService{TaskService: NewTaskService(repo), repo: repo}
+}
+
+func (s *PostgresTaskService) DeleteTask(id int) error {
 	if id < 1 {
 		return customError.ErrIdNotExists
 	}
 	return s.repo.DeleteByID(id)
 }
 
-func (s *TaskService) GetStats() ([]string,error) {
+func (s *PostgresTaskService) GetStats() ([]string, error) {
 	return s.repo.GetStats()
 }

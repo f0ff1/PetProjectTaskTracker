@@ -9,14 +9,13 @@ import (
 
 	myErrors "TaskTracker/errors"
 	"TaskTracker/internal/model"
-
 )
 
-type PostgresStorage struct {
+type PostgresRepo struct {
 	dbPool *pgxpool.Pool
 }
 
-func NewPostgresStorage(connStr string) (*PostgresStorage, error) {
+func NewPostgresRepo(connStr string) (*PostgresRepo, error) {
 	dbPool, err := pgxpool.New(context.Background(), connStr)
 	if err != nil {
 		return nil, myErrors.ErrCantConnectToDB
@@ -32,7 +31,7 @@ func NewPostgresStorage(connStr string) (*PostgresStorage, error) {
 		return nil, myErrors.ErrCantCreateDBTable
 	}
 
-	return &PostgresStorage{dbPool: dbPool}, nil
+	return &PostgresRepo{dbPool: dbPool}, nil
 }
 
 func createTableIfNotExists(pool *pgxpool.Pool) error {
@@ -50,13 +49,13 @@ func createTableIfNotExists(pool *pgxpool.Pool) error {
 	return err
 }
 
-func (s *PostgresStorage) Close() {
+func (s *PostgresRepo) Close() {
 	if s.dbPool != nil {
 		s.dbPool.Close()
 	}
 }
 
-func (s *PostgresStorage) Add(title, desc string, tags []string) (*model.Task, error) {
+func (s *PostgresRepo) Add(title, desc string, tags []string) (*model.Task, error) {
 	addQuery := `INSERT INTO tasks (title, description, tags)
 	VALUES ($1, $2, $3)
 	RETURNING id, created_at`
@@ -80,7 +79,7 @@ func (s *PostgresStorage) Add(title, desc string, tags []string) (*model.Task, e
 
 }
 
-func (s *PostgresStorage) DeleteByID(id int) error {
+func (s *PostgresRepo) DeleteByID(id int) error {
 	deleteQuery := `DELETE FROM tasks where id = $1`
 	row, err := s.dbPool.Exec(context.Background(), deleteQuery, id)
 	if err != nil {
@@ -94,7 +93,7 @@ func (s *PostgresStorage) DeleteByID(id int) error {
 	return nil
 }
 
-func (s *PostgresStorage) GetAll() ([]*model.Task, error) {
+func (s *PostgresRepo) GetAll() ([]*model.Task, error) {
 	getAllQuery := `SELECT * FROM tasks ORDER BY id`
 
 	rows, err := s.dbPool.Query(context.Background(), getAllQuery)
@@ -131,7 +130,7 @@ func (s *PostgresStorage) GetAll() ([]*model.Task, error) {
 	return tasks, nil
 }
 
-func (s *PostgresStorage) GetByID(id int) (*model.Task, error) {
+func (s *PostgresRepo) GetByID(id int) (*model.Task, error) {
 	getByIdQuery := `select * from tasks where id = $1`
 
 	var task model.Task
@@ -155,7 +154,7 @@ func (s *PostgresStorage) GetByID(id int) (*model.Task, error) {
 	return &task, nil
 }
 
-func (s *PostgresStorage) GetByTag(tag string) ([]*model.Task, error) {
+func (s *PostgresRepo) GetByTag(tag string) ([]*model.Task, error) {
 	getByTagQuery := `select * from tasks where tags @> array[$1]`
 
 	var tasksWithTag []*model.Task
@@ -188,7 +187,7 @@ func (s *PostgresStorage) GetByTag(tag string) ([]*model.Task, error) {
 	return tasksWithTag, nil
 }
 
-func (s *PostgresStorage) Complete(id int) (*model.Task, error) {
+func (s *PostgresRepo) Complete(id int) (*model.Task, error) {
 	completeQuery := `update tasks set completed = true, completed_at = CURRENT_TIMESTAMP where id = $1 RETURNING *`
 
 	var task model.Task
@@ -210,7 +209,7 @@ func (s *PostgresStorage) Complete(id int) (*model.Task, error) {
 	return &task, nil
 }
 
-func (s *PostgresStorage) GetStats() ([]string, error) {
+func (s *PostgresRepo) GetStats() ([]string, error) {
 	getStatsQuery := `SELECT tag, COUNT(*) as usage_count FROM (SELECT unnest(tags) as tag FROM tasks) WHERE tag IS NOT NULL GROUP BY tag ORDER BY usage_count DESC LIMIT 3`
 
 	rows, err := s.dbPool.Query(context.Background(), getStatsQuery)

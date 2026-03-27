@@ -33,7 +33,7 @@ func TestJSONStorage_NewStorage(t *testing.T) {
 
 	// подготовка файла
 	path := prepTempJSON(t)
-	storage, err := sjson.NewJSONStorage(path)
+	storage, err := sjson.NewJSONRepo(path)
 
 	if err != nil {
 		t.Fatalf("NewJSONStorage() failed: %v", err)
@@ -65,7 +65,7 @@ func TestJSONStorage_NewStorage_NonExistentFile(t *testing.T) {
 
 	filePath := filepath.Join(tmpDir, "newfile.json")
 
-	storage, err := sjson.NewJSONStorage(filePath)
+	storage, err := sjson.NewJSONRepo(filePath)
 
 	if err != nil {
 		t.Fatalf("NewJSONStorage() failed: %v", err)
@@ -93,7 +93,7 @@ func TestJSONStorage_Add_BasicTask(t *testing.T) {
 	tmpFile.Close()
 	os.Remove(tmpFile.Name())
 
-	storage, err := sjson.NewJSONStorage(tmpFile.Name())
+	storage, err := sjson.NewJSONRepo(tmpFile.Name())
 	if err != nil {
 		t.Fatalf("NewJSONStorage() failed: %v", err)
 	}
@@ -138,12 +138,12 @@ func TestJSONStorage_Persistence(t *testing.T) {
 	path := prepTempJSON(t)
 
 	// Создаем хранилище и добавляем задачи
-	storage1, _ := sjson.NewJSONStorage(path)
+	storage1, _ := sjson.NewJSONRepo(path)
 	storage1.Add("Task 1", "Desc 1", []string{})
 	storage1.Add("Task 2", "Desc 2", []string{})
 
 	// Создаем новое хранилище из того же файла
-	storage2, err := sjson.NewJSONStorage(path)
+	storage2, err := sjson.NewJSONRepo(path)
 	if err != nil {
 		t.Fatalf("Failed to create second storage: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestJSONStorage_GetByID(t *testing.T) {
 
 	path := prepTempJSON(t)
 
-	storage, err := sjson.NewJSONStorage(path)
+	storage, err := sjson.NewJSONRepo(path)
 	if err != nil {
 		t.Fatalf("NewJSONStorage() failed: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestJSONStorage_GetByID_NotFound(t *testing.T) {
 
 	path := prepTempJSON(t)
 
-	storage, err := sjson.NewJSONStorage(path)
+	storage, err := sjson.NewJSONRepo(path)
 	if err != nil {
 		t.Fatalf("NewJSONStorage() failed: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestJSONStorage_Complete(t *testing.T) {
 
 	path := prepTempJSON(t)
 
-	storage, err := sjson.NewJSONStorage(path)
+	storage, err := sjson.NewJSONRepo(path)
 	if err != nil {
 		t.Fatalf("NewJSONStorage() failed: %v", err)
 	}
@@ -256,7 +256,7 @@ func TestJSONStorage_Complete_AlreadyCompleted(t *testing.T) {
 
 	path := prepTempJSON(t)
 
-	storage, err := sjson.NewJSONStorage(path)
+	storage, err := sjson.NewJSONRepo(path)
 	if err != nil {
 		t.Fatalf("NewJSONStorage() failed: %v", err)
 	}
@@ -281,7 +281,7 @@ func TestJSONStorage_GetAll(t *testing.T) {
 
 	path := prepTempJSON(t)
 
-	storage, err := sjson.NewJSONStorage(path)
+	storage, err := sjson.NewJSONRepo(path)
 	if err != nil {
 		t.Fatalf("NewJSONStorage() failed: %v", err)
 	}
@@ -307,7 +307,7 @@ func TestJSONStorage_GetByTag(t *testing.T) {
 
 	path := prepTempJSON(t)
 
-	storage, err := sjson.NewJSONStorage(path)
+	storage, err := sjson.NewJSONRepo(path)
 	if err != nil {
 		t.Fatalf("NewJSONStorage() failed: %v", err)
 	}
@@ -347,7 +347,7 @@ func TestJSONStorage_Concurrent(t *testing.T) {
 
 	path := prepTempJSON(t)
 
-	storage, err := sjson.NewJSONStorage(path)
+	storage, err := sjson.NewJSONRepo(path)
 	if err != nil {
 		t.Fatalf("NewJSONStorage() failed: %v", err)
 	}
@@ -386,13 +386,13 @@ func TestJSONStorage_DataIntegration(t *testing.T) {
 	path := prepTempJSON(t)
 
 	// Первое хранилище - добавляем и завершаем данные
-	storage1, _ := sjson.NewJSONStorage(path)
+	storage1, _ := sjson.NewJSONRepo(path)
 	storage1.Add("Task 1", "Desc 1", []string{})
 	storage1.Add("Task 2", "Desc 2", []string{})
 	storage1.Complete(1)
 
 	// Второе хранилище - загружаем из файла
-	storage2, _ := sjson.NewJSONStorage(path)
+	storage2, _ := sjson.NewJSONRepo(path)
 	tasks, _ := storage2.GetAll()
 
 	// Проверяем что данные загрузились правильно
@@ -419,7 +419,7 @@ func TestJSONStorage_TagPersistence(t *testing.T) {
 	path := prepTempJSON(t)
 
 	// Добавляем задачу с тегами
-	storage1, err := sjson.NewJSONStorage(path)
+	storage1, err := sjson.NewJSONRepo(path)
 	if err != nil {
 		t.Fatalf("NewJSONStorage() failed: %v", err)
 	}
@@ -429,7 +429,7 @@ func TestJSONStorage_TagPersistence(t *testing.T) {
 	}
 
 	// Загружаем из файла
-	storage2, err := sjson.NewJSONStorage(path)
+	storage2, err := sjson.NewJSONRepo(path)
 	if err != nil {
 		t.Fatalf("NewJSONStorage() failed: %v", err)
 	}
@@ -457,7 +457,7 @@ func TestJSONStorage_InvalidPath(t *testing.T) {
 	// Используем несуществующий путь с недопустимым именем
 	invalidPath := "/invalid/nonexistent/path/file.json"
 
-	_, err := sjson.NewJSONStorage(invalidPath)
+	_, err := sjson.NewJSONRepo(invalidPath)
 
 	if err == nil {
 		t.Error("Expected error for invalid path")
@@ -470,7 +470,7 @@ func TestJSONStorage_CompleteAndVerify(t *testing.T) {
 
 	path := prepTempJSON(t)
 
-	storage, _ := sjson.NewJSONStorage(path)
+	storage, _ := sjson.NewJSONRepo(path)
 
 	task, _ := storage.Add("Task", "Description", []string{})
 	beforeComplete := time.Now()

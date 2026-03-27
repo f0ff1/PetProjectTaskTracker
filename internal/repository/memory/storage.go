@@ -8,26 +8,26 @@ import (
 	"TaskTracker/internal/model"
 )
 
-type Storage struct {
+type InMemoryRepo struct {
 	mu     sync.RWMutex
 	tasks  map[int]*model.Task
 	nextID int
 }
 
-func NewStorage() *Storage {
-	return &Storage{
+func NewInMemoryRepo() *InMemoryRepo {
+	return &InMemoryRepo{
 		mu:     sync.RWMutex{},
 		tasks:  make(map[int]*model.Task),
 		nextID: 1,
 	}
 }
 
-func (s *Storage) Add(title, desc string, tags []string) (*model.Task, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (iM *InMemoryRepo) Add(title, desc string, tags []string) (*model.Task, error) {
+	iM.mu.Lock()
+	defer iM.mu.Unlock()
 
 	task := &model.Task{
-		ID:          s.nextID,
+		ID:          iM.nextID,
 		Title:       title,
 		Description: desc,
 		Completed:   false,
@@ -36,17 +36,17 @@ func (s *Storage) Add(title, desc string, tags []string) (*model.Task, error) {
 		Tags:        tags,
 	}
 
-	s.tasks[s.nextID] = task
-	s.nextID++
+	iM.tasks[iM.nextID] = task
+	iM.nextID++
 	return task, nil
 }
 
-func (s *Storage) GetAll() ([]*model.Task, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (iM *InMemoryRepo) GetAll() ([]*model.Task, error) {
+	iM.mu.RLock()
+	defer iM.mu.RUnlock()
 
-	tasks := make([]*model.Task, 0, len(s.tasks))
-	for _, task := range s.tasks {
+	tasks := make([]*model.Task, 0, len(iM.tasks))
+	for _, task := range iM.tasks {
 		tasks = append(tasks, task)
 	}
 
@@ -54,23 +54,23 @@ func (s *Storage) GetAll() ([]*model.Task, error) {
 
 }
 
-func (s *Storage) GetByID(id int) (*model.Task, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (iM *InMemoryRepo) GetByID(id int) (*model.Task, error) {
+	iM.mu.RLock()
+	defer iM.mu.RUnlock()
 
-	task, exists := s.tasks[id]
+	task, exists := iM.tasks[id]
 	if !exists {
 		return nil, myErrors.ErrIdNotExists
 	}
 	return task, nil
 }
 
-func (s *Storage) GetByTag(tag string) ([]*model.Task, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (iM *InMemoryRepo) GetByTag(tag string) ([]*model.Task, error) {
+	iM.mu.RLock()
+	defer iM.mu.RUnlock()
 
 	taggetTasks := make([]*model.Task, 0)
-	for _, task := range s.tasks {
+	for _, task := range iM.tasks {
 		taskTags := task.Tags
 		tagsMap := make(map[string]bool)
 		for _, t := range taskTags {
@@ -85,11 +85,11 @@ func (s *Storage) GetByTag(tag string) ([]*model.Task, error) {
 
 }
 
-func (s *Storage) Complete(id int) (*model.Task, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (iM *InMemoryRepo) Complete(id int) (*model.Task, error) {
+	iM.mu.Lock()
+	defer iM.mu.Unlock()
 
-	task, exists := s.tasks[id]
+	task, exists := iM.tasks[id]
 	if !exists {
 		return nil, myErrors.ErrIdNotExists
 	}
@@ -105,15 +105,15 @@ func (s *Storage) Complete(id int) (*model.Task, error) {
 
 }
 
-func (s *Storage) DeleteByID(id int) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (iM *InMemoryRepo) DeleteByID(id int) error {
+	iM.mu.Lock()
+	defer iM.mu.Unlock()
 
-	_, exists := s.tasks[id]
+	_, exists := iM.tasks[id]
 	if !exists {
 		return myErrors.ErrIdNotExists
 	}
 
-	delete(s.tasks, id)
+	delete(iM.tasks, id)
 	return nil
 }

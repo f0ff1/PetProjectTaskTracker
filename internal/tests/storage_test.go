@@ -12,7 +12,7 @@ import (
 func TestNewStorage(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 
 	if storage == nil {
 		t.Fatal("NewStorage() returned nil")
@@ -34,7 +34,7 @@ func TestNewStorage(t *testing.T) {
 func TestStorage_Add_WithCustomTitle(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 	title := "Купить молоко"
 	description := "Обязательно свежее"
 	tags := []string{"покупки"}
@@ -78,7 +78,7 @@ func TestStorage_Add_WithCustomTitle(t *testing.T) {
 func TestStorage_Add_WithEmptyTitle(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 	description := "Задача без названия"
 
 	task, err := storage.Add("", description, []string{})
@@ -105,7 +105,7 @@ func TestStorage_Add_WithEmptyTitle(t *testing.T) {
 func TestStorage_Add_MultipleTasks(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 
 	task1, err1 := storage.Add("Task 1", "Description 1", []string{})
 	task2, err2 := storage.Add("", "Description 2", []string{})
@@ -142,7 +142,7 @@ func TestStorage_Add_MultipleTasks(t *testing.T) {
 func TestStorage_GetAll_Empty(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 
 	tasks, err := storage.GetAll()
 
@@ -159,7 +159,7 @@ func TestStorage_GetAll_Empty(t *testing.T) {
 func TestStorage_GetAll_WithTasks(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 
 	storage.Add("Задача 1", "Описание 1", []string{})
 	storage.Add("Задача 2", "Описание 2", []string{})
@@ -184,7 +184,7 @@ func TestStorage_GetAll_WithTasks(t *testing.T) {
 func TestStorage_GetByID_Success(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 
 	added1, _ := storage.Add("Task 1", "Description 1", []string{})
 	added2, _ := storage.Add("Task 2", "Description 2", []string{})
@@ -220,7 +220,7 @@ func TestStorage_GetByID_Success(t *testing.T) {
 func TestStorage_GetByID_NotFound(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 	storage.Add("Task", "Description", []string{})
 
 	task, err := storage.GetByID(999)
@@ -237,7 +237,7 @@ func TestStorage_GetByID_NotFound(t *testing.T) {
 func TestStorage_Complete_Success(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 	task, _ := storage.Add("Test Task", "Description", []string{})
 
 	if task.Completed {
@@ -274,7 +274,7 @@ func TestStorage_Complete_Success(t *testing.T) {
 func TestStorage_Complete_AlreadyCompleted(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 	task, _ := storage.Add("Test Task", "Description", []string{})
 
 	_, err1 := storage.Complete(task.ID)
@@ -304,7 +304,7 @@ func TestStorage_Complete_AlreadyCompleted(t *testing.T) {
 func TestStorage_Complete_NotFound(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 
 	_, err := storage.Complete(999)
 
@@ -317,7 +317,7 @@ func TestStorage_Complete_NotFound(t *testing.T) {
 func TestStorage_GetByTag_Empty(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 
 	tasks, err := storage.GetByTag("test")
 
@@ -334,7 +334,7 @@ func TestStorage_GetByTag_Empty(t *testing.T) {
 func TestStorage_GetByTag_Success(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 
 	storage.Add("Task 1", "Desc 1", []string{"work", "urgent"})
 	storage.Add("Task 2", "Desc 2", []string{"personal"})
@@ -368,7 +368,7 @@ func TestStorage_GetByTag_Success(t *testing.T) {
 func TestStorage_GetByTag_MultipleTags(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 
 	storage.Add("Task 1", "Desc 1", []string{"a", "b", "c"})
 	storage.Add("Task 2", "Desc 2", []string{"b", "c"})
@@ -404,7 +404,7 @@ func TestStorage_GetByTag_MultipleTags(t *testing.T) {
 func TestStorage_TaskIntegrity(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 
 	task1, _ := storage.Add("Task 1", "Description 1", []string{"tag1"})
 	task2, _ := storage.Add("Task 2", "Description 2", []string{"tag2"})
@@ -432,7 +432,7 @@ func TestStorage_TaskIntegrity(t *testing.T) {
 func TestStorage_LongTitle(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 
 	longTitle := strings.Repeat("A", 1000)
 
@@ -451,7 +451,7 @@ func TestStorage_LongTitle(t *testing.T) {
 func TestStorage_EmptyTagList(t *testing.T) {
 	t.Parallel()
 
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 
 	task, err := storage.Add("Task", "Description", []string{})
 
@@ -475,7 +475,7 @@ func TestStorage_EmptyTagList(t *testing.T) {
 
 // TestStorage_Concurrent проверяет параллельное добавление
 func TestStorage_Concurrent(t *testing.T) {
-	storage := memory.NewStorage()
+	storage := memory.NewInMemoryRepo()
 
 	const numTasks = 10
 	done := make(chan bool, numTasks)

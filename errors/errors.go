@@ -20,4 +20,5 @@ var (
 	ErrCantReadTable        = errors.New("Невозможно прочитать данные из таблицы")
 	ErrTableIsEmpty         = errors.New("Строки не найдены")
 	ErrCantDeleteTask       = errors.New("Невозможно удалить задачу. Путин запретил.")
+	ErrWrongTypeRepo        = errors.New("Неизвестный тип репозитория")
 )
