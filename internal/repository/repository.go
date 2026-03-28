@@ -1,17 +1,21 @@
 package repository
 
-import "TaskTracker/internal/model"
+import (
+	"context"
+
+	"TaskTracker/internal/model"
+)
 
 type Repository interface {
-	Add(title, description string, tags []string) (*model.Task, error)
-	GetAll() ([]*model.Task, error)
-	GetByID(id int) (*model.Task, error)
-	Complete(id int) (*model.Task, error)
-	GetByTag(tag string) ([]*model.Task, error)
+	Add(ctx context.Context, task *model.Task) (*model.Task, error)
+	GetAll(ctx context.Context) ([]*model.Task, error)
+	GetByID(ctx context.Context, id int) (*model.Task, error)
+	Complete(ctx context.Context, id int) (*model.Task, error)
+	GetByTag(ctx context.Context, tag string) ([]*model.Task, error)
 }
 
 type PostgresRepository interface {
 	Repository
-	DeleteByID(id int) error
-	GetStats() ([]string, error)
+	DeleteByID(ctx context.Context, id int) error
+	GetStats(ctx context.Context) (*model.TaskStats, error)
 }

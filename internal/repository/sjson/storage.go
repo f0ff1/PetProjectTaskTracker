@@ -1,7 +1,9 @@
 package sjson
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -33,13 +35,13 @@ func NewJSONRepo(path string) (*JSONRepo, error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		//Если файла нема нихуя
 		if err := storage.saveToFile(); err != nil {
-			return nil, myErrors.ErrCantCreateJsonFile
+			return nil, fmt.Errorf("Ошибка при создании файла JSON: %w | %w", myErrors.ErrCantCreateJsonFile, err)
 		}
 		return storage, nil
 	}
 
 	if err := storage.loadFromFile(); err != nil {
-		return nil, myErrors.ErrCantReadJsonData
+		return nil, fmt.Errorf("Ошибка при чтении файла JSON: %w | %w", myErrors.ErrCantReadJsonData, err)
 	}
 	return storage, nil
 }
@@ -55,7 +57,7 @@ func (jR *JSONRepo) saveToFile() error {
 
 	file, err := os.Create(jR.filePath)
 	if err != nil {
-		return myErrors.ErrWrongPath
+		return fmt.Errorf("Ошибка при создании файла JSON: %w | %w", myErrors.ErrWrongPath, err)
 	}
 	defer file.Close()
 
@@ -70,14 +72,14 @@ func (jR *JSONRepo) loadFromFile() error {
 
 	file, err := os.Open(jR.filePath)
 	if err != nil {
-		return myErrors.ErrCantReadJsonData
+		return fmt.Errorf("Ошибка при чтении файла JSON: %w | %w", myErrors.ErrCantReadJsonData, err)
 	}
 	defer file.Close()
 
 	var data JSONData
 	decoder := json.NewDecoder(file)
 	if err := decoder.Decode(&data); err != nil {
-		return err
+		return fmt.Errorf("Ошибка при декодировании данных из файла JSON: %w | %w", myErrors.ErrCantReadJsonData, err)
 	}
 
 	jR.nextID = data.NextID
@@ -86,31 +88,26 @@ func (jR *JSONRepo) loadFromFile() error {
 
 }
 
-func (jR *JSONRepo) Add(title, description string, tags []string) (*model.Task, error) {
+func (jR *JSONRepo) Add(ctx context.Context, task *model.Task) (*model.Task, error) {
 	jR.mu.Lock()
-	task := &model.Task{
-		ID:          jR.nextID,
-		Title:       title,
-		Description: description,
-		Completed:   false,
-		CreatedAt:   time.Now(),
-		CompletedAt: nil,
-		Tags:        tags,
-	}
+	task.ID = jR.nextID
+	task.Completed = false
+	task.CreatedAt = time.Now()
+	task.CompletedAt = nil
 
 	jR.tasks[jR.nextID] = task
 	jR.nextID++
 	jR.mu.Unlock()
 
 	if err := jR.saveToFile(); err != nil {
-		return nil, myErrors.ErrCantSaveTaskToJson
+		return nil, fmt.Errorf("Ошибка добавления задачи: %w | %w", myErrors.ErrCantSaveTaskToJson, err)
 	}
 
 	return task, nil
 
 }
 
-func (jR *JSONRepo) GetAll() ([]*model.Task, error) {
+func (jR *JSONRepo) GetAll(ctx context.Context) ([]*model.Task, error) {
 	jR.mu.RLock()
 	defer jR.mu.RUnlock()
 
@@ -121,24 +118,24 @@ func (jR *JSONRepo) GetAll() ([]*model.Task, error) {
 	return tasks, nil
 }
 
-func (jR *JSONRepo) GetByID(id int) (*model.Task, error) {
+func (jR *JSONRepo) GetByID(ctx context.Context, id int) (*model.Task, error) {
 	jR.mu.RLock()
 	defer jR.mu.RUnlock()
 
 	task, exists := jR.tasks[id]
 	if !exists {
-		return nil, myErrors.ErrIdNotExists
+		return nil, fmt.Errorf("Ошибка при чтении задачи: %w", myErrors.ErrIdNotExists)
 	}
 	return task, nil
 
 }
 
-func (jR *JSONRepo) GetByTag(tag string) ([]*model.Task, error) {
+func (jR *JSONRepo) GetByTag(ctx context.Context, tag string) ([]*model.Task, error) {
 	jR.mu.RLock()
 	defer jR.mu.RUnlock()
 
 	taggetTasks := make([]*model.Task, 0)
-	tasks, _ := jR.GetAll()
+	tasks, _ := jR.GetAll(ctx)
 	for _, task := range tasks {
 		taskTags := task.Tags
 		tagsMap := make(map[string]bool)
@@ -155,15 +152,15 @@ func (jR *JSONRepo) GetByTag(tag string) ([]*model.Task, error) {
 
 }
 
-func (jR *JSONRepo) Complete(id int) (*model.Task, error) {
+func (jR *JSONRepo) Complete(ctx context.Context, id int) (*model.Task, error) {
 
-	task, err := jR.GetByID(id)
+	task, err := jR.GetByID(ctx, id)
 	if err != nil {
-		return nil, myErrors.ErrIdNotExists
+		return nil, fmt.Errorf("Ошибка при чтении задачи: %w | %w", myErrors.ErrIdNotExists, err)
 	}
 
 	if task.Completed {
-		return nil, myErrors.ErrTaskAlredyComplete
+		return nil, fmt.Errorf("Ошибка при завершении задачи: %w | %w", myErrors.ErrTaskAlredyComplete, err)
 	}
 
 	jR.mu.Lock()
@@ -173,23 +170,23 @@ func (jR *JSONRepo) Complete(id int) (*model.Task, error) {
 	jR.mu.Unlock()
 
 	if err := jR.saveToFile(); err != nil {
-		return nil, myErrors.ErrCantSaveTaskToJson
+		return nil, fmt.Errorf("Ошибка при сохранении задачи: %w | %w", myErrors.ErrCantSaveTaskToJson, err)
 	}
 	return task, nil
 
 }
 
-func (jR *JSONRepo) DeleteByID(id int) error {
-	_, err := jR.GetByID(id)
+func (jR *JSONRepo) DeleteByID(ctx context.Context, id int) error {
+	_, err := jR.GetByID(ctx, id)
 	if err != nil {
-		return myErrors.ErrIdNotExists
+		return fmt.Errorf("Ошибка при удалении задачи: %w | %w", myErrors.ErrIdNotExists, err)
 	}
 	jR.mu.Lock()
 	delete(jR.tasks, id)
 	jR.mu.Unlock()
 
 	if err := jR.saveToFile(); err != nil {
-		return myErrors.ErrCantSaveTaskToJson
+		return fmt.Errorf("Ошибка при сохранении задачи: %w | %w", myErrors.ErrCantSaveTaskToJson, err)
 	}
 	return nil
 

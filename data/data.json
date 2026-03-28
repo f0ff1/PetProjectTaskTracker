@@ -1,5 +1,5 @@
 {
- "next_id": 7,
+ "next_id": 8,
  "tasks": {
   "2": {
    "ID": 2,
@@ -40,6 +40,17 @@
    "CreatedAt": "2026-03-26T13:26:12.6317942+03:00",
    "CompletedAt": null,
    "Tags": []
+  },
+  "7": {
+   "ID": 7,
+   "Title": "Проверка",
+   "Description": "Проверяю работу новой логики добавления задачи",
+   "Completed": false,
+   "CreatedAt": "2026-03-27T12:29:48.0238498+03:00",
+   "CompletedAt": null,
+   "Tags": [
+    "тест"
+   ]
   }
  }
 }

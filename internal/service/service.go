@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 
@@ -17,41 +18,50 @@ func NewTaskService(repo repository.Repository) *TaskService {
 	return &TaskService{repo: repo}
 }
 
+func createTask(title, desc string, tags []string) *model.Task {
+	if title == "" {
+		title = generateDefaultName()
+	}
+	return &model.Task{
+		Title:       title,
+		Description: desc,
+		Tags:        tags,
+	}
+}
+
 func generateDefaultName() string {
 	randNumbers := rand.Intn(10000000)
 	return fmt.Sprintf("def-name-exr-%07d", randNumbers)
 }
 
-func (s *TaskService) AddTask(title, desc string, tags []string) (*model.Task, error) {
-	if title == "" {
-		title = generateDefaultName()
-	}
-	return s.repo.Add(title, desc, tags)
+func (s *TaskService) AddTask(ctx context.Context, title, desc string, tags []string) (*model.Task, error) {
+	task := createTask(title, desc, tags)
+	return s.repo.Add(ctx, task)
 }
 
-func (s *TaskService) GetAllTasks() ([]*model.Task, error) {
-	return s.repo.GetAll()
+func (s *TaskService) GetAllTasks(ctx context.Context) ([]*model.Task, error) {
+	return s.repo.GetAll(ctx)
 }
 
-func (s *TaskService) GetTaskById(id int) (*model.Task, error) {
+func (s *TaskService) GetTaskById(ctx context.Context, id int) (*model.Task, error) {
 	if id < 1 {
-		return nil, customError.ErrIdNotExists
+		return nil, fmt.Errorf("Ошибка сервиса: %w", customError.ErrIdNotExists)
 	}
-	return s.repo.GetByID(id)
+	return s.repo.GetByID(ctx, id)
 }
 
-func (s *TaskService) GetTasksByTag(tag string) ([]*model.Task, error) {
+func (s *TaskService) GetTasksByTag(ctx context.Context, tag string) ([]*model.Task, error) {
 	if tag == "" {
-		return nil, customError.ErrWrongTag
+		return nil, fmt.Errorf("Ошибка сервиса: %w", customError.ErrWrongTag)
 	}
-	return s.repo.GetByTag(tag)
+	return s.repo.GetByTag(ctx, tag)
 }
 
-func (s *TaskService) CompleteTask(id int) (*model.Task, error) {
+func (s *TaskService) CompleteTask(ctx context.Context, id int) (*model.Task, error) {
 	if id < 1 {
-		return nil, customError.ErrIdNotExists
+		return nil, fmt.Errorf("Ошибка сервиса: %w", customError.ErrIdNotExists)
 	}
-	return s.repo.Complete(id)
+	return s.repo.Complete(ctx, id)
 }
 
 type PostgresTaskService struct {
@@ -63,13 +73,13 @@ func NewPostgresTaskService(repo repository.PostgresRepository) *PostgresTaskSer
 	return &PostgresTaskService{TaskService: NewTaskService(repo), repo: repo}
 }
 
-func (s *PostgresTaskService) DeleteTask(id int) error {
+func (s *PostgresTaskService) DeleteTask(ctx context.Context, id int) error {
 	if id < 1 {
-		return customError.ErrIdNotExists
+		return fmt.Errorf("Ошибка сервиса: %w", customError.ErrIdNotExists)
 	}
-	return s.repo.DeleteByID(id)
+	return s.repo.DeleteByID(ctx, id)
 }
 
-func (s *PostgresTaskService) GetStats() ([]string, error) {
-	return s.repo.GetStats()
+func (s *PostgresTaskService) GetStats(ctx context.Context) (*model.TaskStats, error) {
+	return s.repo.GetStats(ctx)
 }
