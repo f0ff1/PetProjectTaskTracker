@@ -122,7 +122,7 @@ func (h *CLIHandler) handleChoice(defCtx context.Context, choice string) bool {
 		// Статистика доступна только для PostgreSQL
 		if h.extendedService != nil {
 
-			h.handleGetStats(defCtx)
+			h.handleStats(defCtx)
 		} else {
 			fmt.Println("❌ Статистика недоступна для этого типа хранилища")
 		}
@@ -236,25 +236,29 @@ func (h *CLIHandler) handleComplete(defCtx context.Context) {
 	fmt.Printf("✅ Задача '%s' отмечена как выполненная\n", task.Title)
 }
 
-func (h *CLIHandler) handleGetStats(defCtx context.Context) {
-	ctx, cancel := context.WithTimeout(defCtx, 3*time.Second)
-	defer cancel()
-	stats, err := h.extendedService.GetStats(ctx)
+func (h *CLIHandler) handleStats(defCtx context.Context) {
+	fmt.Println("\n📊 Загрузка статистики...")
+	stats, lastUpdated, isUpdating, err := h.extendedService.GetStatsWithInfo(defCtx)
 	if err != nil {
-		fmt.Printf("❌ Ошибка при получении статистики: %v\n", err)
+		fmt.Printf("❌ Ошибка: %v\n", err)
 		return
 	}
 
-	// if len(stats) == 0 {
-	// 	fmt.Println("📊 Статистика недоступна или нет данных")
-	// 	return
-	// }
+	if isUpdating {
+		fmt.Println("🔄 Статистика обновляется в фоне...")
+	}
 
-	// fmt.Println("\n📊 ТОП-3 ПОПУЛЯРНЫХ ТЕГА:")
-	// for i, stat := range stats {
-	// 	fmt.Printf("  %d. %s\n", i+1, stat)
-	// }
-	// fmt.Println()
+	if time.Since(lastUpdated) > 5*time.Minute {
+		fmt.Println("⚠️ Данные могут быть устаревшими")
+	}
+
+	fmt.Printf("📅 Последнее обновление: %s\n", lastUpdated.Format("15:04:05"))
+
+	h.printStats(stats)
+}
+
+func (h *CLIHandler) printStats(stats *model.TaskStats) {
+
 	// Заголовок
 	fmt.Println("\n" + strings.Repeat("=", 60))
 	fmt.Println("📊  ДЕТАЛЬНАЯ СТАТИСТИКА ЗАДАЧ  📊")

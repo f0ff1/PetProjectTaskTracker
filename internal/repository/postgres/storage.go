@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,8 +15,15 @@ import (
 	"TaskTracker/internal/model"
 )
 
+type StatsCache struct {
+	mu         sync.RWMutex
+	stats      *model.TaskStats
+	lastUpdate time.Time
+	isUpdating bool
+}
 type PostgresRepo struct {
 	dbPool *pgxpool.Pool
+	cache  *StatsCache
 }
 
 func NewPostgresRepo(connStr string) (*PostgresRepo, error) {
@@ -33,7 +42,14 @@ func NewPostgresRepo(connStr string) (*PostgresRepo, error) {
 		return nil, fmt.Errorf("Ошибка при создании таблицы: %w | %w", myErrors.ErrCantCreateDBTable, err)
 	}
 
-	return &PostgresRepo{dbPool: dbPool}, nil
+	return &PostgresRepo{
+		dbPool: dbPool,
+		cache: &StatsCache{
+			stats:      nil,
+			lastUpdate: time.Time{},
+			isUpdating: false,
+		},
+	}, nil
 }
 
 func createTableIfNotExists(pool *pgxpool.Pool) error {
@@ -207,29 +223,7 @@ func (s *PostgresRepo) Complete(ctx context.Context, id int) (*model.Task, error
 	return &task, nil
 }
 
-func (s *PostgresRepo) GetStats(ctx context.Context) (*model.TaskStats, error) {
-	// getStatsQuery := `SELECT tag, COUNT(*) as usage_count FROM (SELECT unnest(tags) as tag FROM tasks) WHERE tag IS NOT NULL GROUP BY tag ORDER BY usage_count DESC LIMIT 3`
-
-	// rows, err := s.dbPool.Query(ctx, getStatsQuery)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("Ошибка при чтении статистики: %w | %w", myErrors.ErrCantReadTable, err)
-	// }
-	// defer rows.Close()
-
-	// var dataStats []string
-
-	// for rows.Next() {
-	// 	var tag string
-	// 	var usageCount int
-
-	// 	if err := rows.Scan(&tag, &usageCount); err != nil {
-	// 		return nil, err
-	// 	}
-	// 	dataStats = append(dataStats, fmt.Sprintf("Тег: %s | Количество: %d", tag, usageCount))
-	// }
-
-	// return dataStats, nil
-
+func (s *PostgresRepo) GetStatsData(ctx context.Context) (*model.TaskStats, error) {
 	query := `
         -- 1. Базовая статистика по задачам
         WITH task_counts AS (
@@ -436,4 +430,71 @@ func (s *PostgresRepo) GetStats(ctx context.Context) (*model.TaskStats, error) {
 	}
 	return &stats, nil
 
+}
+
+func (s *PostgresRepo) StartStatsUpdater(ctx context.Context, interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		s.UpdateStats(ctx)
+
+		for {
+			select {
+			case <-ticker.C:
+				s.UpdateStats(ctx)
+			case <-ctx.Done():
+				slog.Info("Остановка обновления статистики")
+				return
+			}
+		}
+
+	}()
+}
+
+func (s *PostgresRepo) UpdateStats(ctx context.Context) {
+	if !s.cache.isUpdating {
+		s.cache.mu.Lock()
+		s.cache.isUpdating = true
+		s.cache.mu.Unlock()
+	}
+
+	defer func() {
+		s.cache.mu.Lock()
+		s.cache.isUpdating = false
+		s.cache.mu.Unlock()
+	}()
+
+	stats, err := s.GetStatsData(ctx)
+	if err != nil {
+		slog.Error("Ошибка получения статистики", "error", err)
+		return
+	}
+
+	s.cache.mu.Lock()
+	s.cache.stats = stats
+	s.cache.lastUpdate = time.Now()
+	s.cache.mu.Unlock()
+
+	slog.Info("Стата обновлена")
+
+}
+
+func (s *PostgresRepo) GetStatsFromCache(ctx context.Context) (*model.TaskStats, error) {
+	s.cache.mu.RLock()
+	defer s.cache.mu.Unlock()
+
+	if s.cache.stats == nil {
+		return nil, myErrors.ErrStatsDoesntWritten
+	}
+
+	return s.cache.stats, nil
+
+}
+
+func (s *PostgresRepo) GetStatsWithInfo(ctx context.Context) (*model.TaskStats, time.Time, bool, error) {
+	s.cache.mu.RLock()
+	defer s.cache.mu.RUnlock()
+
+	return s.cache.stats, s.cache.lastUpdate, s.cache.isUpdating, nil
 }

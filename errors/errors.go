@@ -21,4 +21,5 @@ var (
 	ErrTableIsEmpty         = errors.New("Строки не найдены")
 	ErrCantDeleteTask       = errors.New("Невозможно удалить задачу. Возможно, она не существует")
 	ErrWrongTypeRepo        = errors.New("Неверный тип репозитория")
+	ErrStatsDoesntWritten   = errors.New("Статистика еще не записана")
 )
