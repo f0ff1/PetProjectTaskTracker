@@ -1,7 +1,9 @@
 package factory
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	myerrors "TaskTracker/errors"
 	"TaskTracker/internal/handler"
@@ -9,6 +11,7 @@ import (
 	"TaskTracker/internal/repository/postgres"
 	"TaskTracker/internal/repository/sjson"
 	"TaskTracker/internal/service"
+
 )
 
 type StorageType string
@@ -39,6 +42,8 @@ func CreateCLIHandler(storageType StorageType, connString string, jsonPath strin
 			return nil, fmt.Errorf("Ошибка при создании Postgres репозитория: %w", err)
 		}
 		svc := service.NewPostgresTaskService(repo)
+
+		repo.StartStatsUpdater(context.Background(), 5*time.Minute)
 		return handler.NewCLIHandler(svc.TaskService, svc), nil
 	default:
 		return nil, fmt.Errorf("Ошибка при создании сервиса: %w", myerrors.ErrWrongTypeRepo)

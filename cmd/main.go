@@ -7,7 +7,6 @@ import (
 	"TaskTracker/config"
 	myerrors "TaskTracker/errors"
 	"TaskTracker/factory"
-
 )
 
 func main() {
@@ -61,7 +60,7 @@ func tryPostgres() interface{ Run(ctx context.Context) } {
 		fmt.Printf("⚠️ Не удалось загрузить конфиг PostgreSQL: %v\n", err)
 		return nil
 	}
-	
+
 	dsn := cfg.GetDSN()
 	fmt.Printf("🔌 Подключение к PostgreSQL: %s\n", dsn)
 	cliHandler, err := factory.CreateCLIHandler(factory.Postgres, dsn, "")

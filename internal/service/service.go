@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"time"
 
 	customError "TaskTracker/errors"
 	"TaskTracker/internal/model"
@@ -80,6 +81,6 @@ func (s *PostgresTaskService) DeleteTask(ctx context.Context, id int) error {
 	return s.repo.DeleteByID(ctx, id)
 }
 
-func (s *PostgresTaskService) GetStats(ctx context.Context) (*model.TaskStats, error) {
-	return s.repo.GetStats(ctx)
+func (s *PostgresTaskService) GetStatsWithInfo(ctx context.Context) (*model.TaskStats, time.Time, bool, error) {
+	return s.repo.GetStatsWithInfo(ctx)
 }
