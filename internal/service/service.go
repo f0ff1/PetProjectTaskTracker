@@ -84,3 +84,13 @@ func (s *PostgresTaskService) DeleteTask(ctx context.Context, id int) error {
 func (s *PostgresTaskService) GetStatsWithInfo(ctx context.Context) (*model.TaskStats, time.Time, bool, error) {
 	return s.repo.GetStatsWithInfo(ctx)
 }
+
+// GetStats получает статистику (с проверкой свежести)
+func (s *PostgresTaskService) GetStats(ctx context.Context) (*model.TaskStats, error) {
+	return s.repo.GetStatsWithRefresh(ctx, false)
+}
+
+// GetStatsForce принудительно обновляет статистику
+func (s *PostgresTaskService) GetStatsForce(ctx context.Context) (*model.TaskStats, error) {
+	return s.repo.GetStatsWithRefresh(ctx, true)
+}

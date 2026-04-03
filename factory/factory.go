@@ -7,11 +7,10 @@ import (
 
 	myerrors "TaskTracker/errors"
 	"TaskTracker/internal/handler"
+	"TaskTracker/internal/repository/database"
 	"TaskTracker/internal/repository/memory"
-	"TaskTracker/internal/repository/postgres"
 	"TaskTracker/internal/repository/sjson"
 	"TaskTracker/internal/service"
-
 )
 
 type StorageType string
@@ -37,7 +36,7 @@ func CreateCLIHandler(storageType StorageType, connString string, jsonPath strin
 		svc := service.NewTaskService(repo)
 		return handler.NewCLIHandler(svc, nil), nil
 	case Postgres:
-		repo, err := postgres.NewPostgresRepo(connString)
+		repo, err := database.NewPostgresRepo(connString)
 		if err != nil {
 			return nil, fmt.Errorf("Ошибка при создании Postgres репозитория: %w", err)
 		}

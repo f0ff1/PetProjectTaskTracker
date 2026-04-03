@@ -22,4 +22,6 @@ var (
 	ErrCantDeleteTask       = errors.New("Невозможно удалить задачу. Возможно, она не существует")
 	ErrWrongTypeRepo        = errors.New("Неверный тип репозитория")
 	ErrStatsDoesntWritten   = errors.New("Статистика еще не записана")
+	ErrCreateMigration      = errors.New("Ошибка создания мигратора")
+	ErrCantUseMigration     = errors.New("Ошибка применения миграций")
 )

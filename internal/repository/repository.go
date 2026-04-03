@@ -5,9 +5,10 @@ import (
 	"time"
 
 	"TaskTracker/internal/model"
+
 )
 
-// Базар
+// База
 type Repository interface {
 	Add(ctx context.Context, task *model.Task) (*model.Task, error)
 	GetAll(ctx context.Context) ([]*model.Task, error)
@@ -21,4 +22,5 @@ type PostgresRepository interface {
 	Repository
 	DeleteByID(ctx context.Context, id int) error
 	GetStatsWithInfo(ctx context.Context) (*model.TaskStats, time.Time, bool, error)
+	GetStatsWithRefresh(ctx context.Context, forceRefresh bool) (*model.TaskStats, error)
 }
