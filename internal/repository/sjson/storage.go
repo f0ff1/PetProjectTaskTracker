@@ -10,6 +10,9 @@ import (
 
 	myErrors "TaskTracker/errors"
 	"TaskTracker/internal/model"
+
+
+
 )
 
 type JSONData struct {
@@ -88,7 +91,7 @@ func (jR *JSONRepo) loadFromFile() error {
 
 }
 
-func (jR *JSONRepo) Add(ctx context.Context, task *model.Task) (*model.Task, error) {
+func (jR *JSONRepo) Add(ctx context.Context, userID int, task *model.Task) (*model.Task, error) {
 	jR.mu.Lock()
 	task.ID = jR.nextID
 	task.Completed = false
@@ -107,7 +110,7 @@ func (jR *JSONRepo) Add(ctx context.Context, task *model.Task) (*model.Task, err
 
 }
 
-func (jR *JSONRepo) GetAll(ctx context.Context) ([]*model.Task, error) {
+func (jR *JSONRepo) GetAllTasksByUser(ctx context.Context, userID int) ([]*model.Task, error) {
 	jR.mu.RLock()
 	defer jR.mu.RUnlock()
 
@@ -118,11 +121,11 @@ func (jR *JSONRepo) GetAll(ctx context.Context) ([]*model.Task, error) {
 	return tasks, nil
 }
 
-func (jR *JSONRepo) GetByID(ctx context.Context, id int) (*model.Task, error) {
+func (jR *JSONRepo) GetByID(ctx context.Context, userID int, taskID int) (*model.Task, error) {
 	jR.mu.RLock()
 	defer jR.mu.RUnlock()
 
-	task, exists := jR.tasks[id]
+	task, exists := jR.tasks[taskID]
 	if !exists {
 		return nil, fmt.Errorf("Ошибка при чтении задачи: %w", myErrors.ErrIdNotExists)
 	}
@@ -130,12 +133,12 @@ func (jR *JSONRepo) GetByID(ctx context.Context, id int) (*model.Task, error) {
 
 }
 
-func (jR *JSONRepo) GetByTag(ctx context.Context, tag string) ([]*model.Task, error) {
+func (jR *JSONRepo) GetByTag(ctx context.Context, userID int, tag string) ([]*model.Task, error) {
 	jR.mu.RLock()
 	defer jR.mu.RUnlock()
 
 	taggetTasks := make([]*model.Task, 0)
-	tasks, _ := jR.GetAll(ctx)
+	tasks, _ := jR.GetAllTasksByUser(ctx, userID)
 	for _, task := range tasks {
 		taskTags := task.Tags
 		tagsMap := make(map[string]bool)
@@ -152,9 +155,9 @@ func (jR *JSONRepo) GetByTag(ctx context.Context, tag string) ([]*model.Task, er
 
 }
 
-func (jR *JSONRepo) Complete(ctx context.Context, id int) (*model.Task, error) {
+func (jR *JSONRepo) Complete(ctx context.Context, userID int, taskID int) (*model.Task, error) {
 
-	task, err := jR.GetByID(ctx, id)
+	task, err := jR.GetByID(ctx, userID, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("Ошибка при чтении задачи: %w | %w", myErrors.ErrIdNotExists, err)
 	}
@@ -176,8 +179,8 @@ func (jR *JSONRepo) Complete(ctx context.Context, id int) (*model.Task, error) {
 
 }
 
-func (jR *JSONRepo) DeleteByID(ctx context.Context, id int) error {
-	_, err := jR.GetByID(ctx, id)
+func (jR *JSONRepo) DeleteByID(ctx context.Context, userID int, id int) error {
+	_, err := jR.GetByID(ctx, userID, id)
 	if err != nil {
 		return fmt.Errorf("Ошибка при удалении задачи: %w | %w", myErrors.ErrIdNotExists, err)
 	}
