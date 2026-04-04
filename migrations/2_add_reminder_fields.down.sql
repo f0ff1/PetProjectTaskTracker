@@ -1,0 +1,4 @@
+ALTER TABLE tasks 
+DROP COLUMN IF EXISTS due_date,
+DROP COLUMN IF EXISTS reminder_sent,
+DROP COLUMN IF EXISTS reminder_offset;

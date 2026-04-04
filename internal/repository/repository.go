@@ -27,4 +27,6 @@ type PostgresRepository interface {
 	GetAllUsers(ctx context.Context) ([]*model.User, error)
 	GetStatsWithInfo(ctx context.Context, userID int) (*model.TaskStats, time.Time, bool, error)
 	GetStatsWithRefresh(ctx context.Context, userID int, forceRefresh bool) (*model.TaskStats, error)
+	GetTasksForReminder(ctx context.Context) ([]*model.Task, error)
+	MarkReminderSent(ctx context.Context, taskID int) error
 }

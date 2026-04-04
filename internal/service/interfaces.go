@@ -21,4 +21,7 @@ type ExtendedTaskService interface {
 	GetAllTasksForAdmin(ctx context.Context) ([]*model.Task, error)
 
 	GetStatsWithInfo(ctx context.Context, userID int) (*model.TaskStats, time.Time, bool, error)
+
+	GetTasksForReminder(ctx context.Context) ([]*model.Task, error)
+	MarkReminderSent(ctx context.Context, taskID int) error
 }

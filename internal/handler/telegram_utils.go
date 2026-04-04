@@ -2,6 +2,7 @@ package handler
 
 import (
 	"log"
+	"strconv"
 	"strings"
 
 	customError "TaskTracker/errors"
@@ -10,18 +11,22 @@ import (
 )
 
 const (
-	StateIdle                = ""
-	StateAwaitingTitle       = "awaiting_title"
-	StateAwaitingDescription = "awaiting_description"
-	StateAwaitingTags        = "awaiting_tags"
+	StateIdle                   = ""
+	StateAwaitingTitle          = "awaiting_title"
+	StateAwaitingDescription    = "awaiting_description"
+	StateAwaitingTags           = "awaiting_tags"
+	StateAwaitingDueDate        = "awaiting_due_date"
+	StateAwaitingReminderOffset = "awaiting_reminder_offset"
 
 	dateFormat = "02.01.2006 15:04"
 )
 
 type PendingTask struct {
-	Title       string
-	Description string
-	Tags        []string
+	Title          string
+	Description    string
+	Tags           []string
+	DueDate        *string // Дата в формате строки
+	ReminderOffset *string // "1h", "30m", "1d" и т.д.
 }
 
 // handleAndLogError логирует подробную ошибку и отправляет пользователю дружелюбное сообщение
@@ -106,27 +111,25 @@ func (h *TelegramHandler) parseTags(input string) []string {
 	return tags
 }
 
-// escapeMarkdown экранирует специальные символы для Markdown
-func escapeMarkdown(text string) string {
-	replacer := strings.NewReplacer(
-		"_", "\\_",
-		"*", "\\*",
-		"[", "\\[",
-		"]", "\\]",
-		"(", "\\(",
-		")", "\\)",
-		"~", "\\~",
-		"`", "\\`",
-		">", "\\>",
-		"#", "\\#",
-		"+", "\\+",
-		"-", "\\-",
-		"=", "\\=",
-		"|", "\\|",
-		"{", "\\{",
-		"}", "\\}",
-		".", "\\.",
-		"!", "\\!",
-	)
-	return replacer.Replace(text)
+// isValidDuration проверяет, является ли строка валидным форматом длительности (30m, 1h, 2h, 1d)
+func isValidDuration(input string) bool {
+	input = strings.TrimSpace(input)
+	if len(input) < 2 {
+		return false
+	}
+
+	lastChar := input[len(input)-1]
+	if lastChar != 'm' && lastChar != 'h' && lastChar != 'd' {
+		return false
+	}
+
+	// Проверяем, что впереди цифры
+	numStr := input[:len(input)-1]
+	if _, err := strconv.ParseInt(numStr, 10, 64); err != nil {
+		return false
+	}
+
+	return true
 }
+
+// escapeMarkdown экранирует специальные символы для Markdown

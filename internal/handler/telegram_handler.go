@@ -13,6 +13,7 @@ import (
 
 	"TaskTracker/internal/model"
 	"TaskTracker/internal/service"
+	"TaskTracker/internal/utils"
 )
 
 type TelegramHandler struct {
@@ -273,12 +274,60 @@ func (h *TelegramHandler) handleDialogState(ctx context.Context, chatID int64, u
 		if input != "/skip" && input != "" {
 			pending.Tags = h.parseTags(input)
 		}
+		h.setPendingTask(chatID, pending)
+		h.setState(chatID, StateAwaitingDueDate)
+		h.sendMessage(chatID, "📅 Введите срок выполнения (или /skip чтобы пропустить):\n\nФормат: ДД.МММ.ГГГГ ЧЧ:МИ\nПример: 15.04.2026 18:30", false)
 
-		task, err := h.taskService.AddTask(ctx, userID, pending.Title, pending.Description, pending.Tags)
+	case StateAwaitingDueDate:
+		pending := h.getPendingTask(chatID)
+		if pending == nil {
+			h.clearState(chatID)
+			h.sendMessage(chatID, "❌ Ошибка: начните заново с /add", false)
+			return
+		}
+
+		if input != "/skip" && input != "" {
+			// Проверяем формат даты
+			if _, err := time.Parse(dateFormat, input); err != nil {
+				h.sendMessage(chatID, "❌ Неправильный формат даты. Используйте: ДД.МММ.ГГГГ ЧЧ:МИ\nПример: 15.04.2026 18:30", false)
+				return
+			}
+			// Сохраняем дату как строку
+			pending.DueDate = &input
+		}
+		h.setPendingTask(chatID, pending)
+		h.setState(chatID, StateAwaitingReminderOffset)
+		h.sendMessage(chatID, "⏰ Введите время напоминания перед сроком (или /skip):\n\nПримеры: 30m, 1h, 2h, 1d", false)
+
+	case StateAwaitingReminderOffset:
+		pending := h.getPendingTask(chatID)
+		if pending == nil {
+			h.clearState(chatID)
+			h.sendMessage(chatID, "❌ Ошибка: начните заново с /add", false)
+			return
+		}
+
+		if input != "/skip" && input != "" {
+			// Проверяем формат offset (минимальная проверка)
+			if !isValidDuration(input) {
+				h.sendMessage(chatID, "❌ Неправильный формат. Используйте: 30m, 1h, 2h, 1d\n(m=минуты, h=часы, d=дни)", false)
+				return
+			}
+			pending.ReminderOffset = &input
+		}
+
+		// Преобразуем ReminderOffset в строку (поле в модели тип string)
+		reminderOffset := ""
+		if pending.ReminderOffset != nil {
+			reminderOffset = *pending.ReminderOffset
+		}
+
+		// Создаем задачу с данными
+		task, err := h.taskService.AddTaskWithReminder(ctx, userID, pending.Title, pending.Description, pending.Tags, pending.DueDate, reminderOffset)
 		h.clearState(chatID)
 
 		if err != nil {
-			h.handleAndLogErrorWithContext(chatID, "AddTask", err, userID, fmt.Sprintf("Title=%s Tags=%v", pending.Title, pending.Tags))
+			h.handleAndLogErrorWithContext(chatID, "AddTaskWithReminder", err, userID, fmt.Sprintf("Title=%s Tags=%v DueDate=%v", pending.Title, pending.Tags, pending.DueDate))
 			return
 		}
 
@@ -503,25 +552,22 @@ func (h *TelegramHandler) buildTaskMessage(task *model.Task, showCompleteButton 
 	sb.WriteString(fmt.Sprintf("│ %s *%s*\n", statusEmoji, statusText))
 	sb.WriteString("├────────────────────────────────────────┤\n")
 
-	title := escapeMarkdown(task.Title)
-	if len(title) > 40 {
-		title = title[:37] + "..."
-	}
+	title := utils.EscapeMarkdown(task.Title)
+
+	title = utils.Truncate(title, 40)
 	sb.WriteString(fmt.Sprintf("│ 📝 *Название:* %s\n", title))
 
 	if task.Description != "" {
-		desc := escapeMarkdown(task.Description)
-		if len(desc) > 40 {
-			desc = desc[:37] + "..."
-		}
+		desc := utils.EscapeMarkdown(task.Description)
+
+		desc = utils.Truncate(desc, 40)
 		sb.WriteString(fmt.Sprintf("│ 📄 *Описание:* %s\n", desc))
 	}
 
 	if len(task.Tags) > 0 {
 		tagsStr := strings.Join(task.Tags, " ")
-		if len(tagsStr) > 35 {
-			tagsStr = tagsStr[:32] + "..."
-		}
+
+		tagsStr = utils.Truncate(tagsStr, 35)
 		sb.WriteString(fmt.Sprintf("│ 🏷️ *Теги:* `%s`\n", tagsStr))
 	}
 
@@ -529,6 +575,14 @@ func (h *TelegramHandler) buildTaskMessage(task *model.Task, showCompleteButton 
 
 	if task.Completed && task.CompletedAt != nil {
 		sb.WriteString(fmt.Sprintf("│ ✅ *Завершена:* %s\n", task.CompletedAt.Format(dateFormat)))
+	}
+
+	if task.DueDate != nil {
+		sb.WriteString(fmt.Sprintf("│ 📅 *Срок:* %s\n", task.DueDate.Format(dateFormat)))
+	}
+
+	if task.ReminderOffset != nil && *task.ReminderOffset != "" {
+		sb.WriteString(fmt.Sprintf("│ 🔔 *Напоминание:* за %s до срока\n", *task.ReminderOffset))
 	}
 
 	sb.WriteString("└────────────────────────────────────────┘")
@@ -573,4 +627,29 @@ func (h *TelegramHandler) updateTaskMessage(chatID int64, messageID int, task *m
 	editMsg.ParseMode = "Markdown"
 	editMsg.ReplyMarkup = keyboard
 	h.bot.Send(editMsg)
+}
+
+func (h *TelegramHandler) SendReminderMessage(chatID int64, task *model.Task, timeLeftText string) {
+	message := fmt.Sprintf(
+		"🔔 *Напоминание о задаче!*\n\n"+
+			"📋 *Задача #%d:* %s\n"+
+			"%s\n\n"+
+			"✅ Выполнить: `/complete %d`\n"+
+			"🗑️ Удалить: `/delete %d`",
+		task.UserTaskID,
+		utils.EscapeMarkdown(task.Title),
+		timeLeftText,
+		task.UserTaskID,
+		task.UserTaskID,
+	)
+
+	if task.Description != "" {
+		message += fmt.Sprintf("\n📝 %s", utils.EscapeMarkdown(utils.Truncate(task.Description, 100)))
+	}
+
+	if task.DueDate != nil {
+		message += fmt.Sprintf("\n\n📅 *Дедлайн:* %s", task.DueDate.Format("02.01.2006 15:04"))
+	}
+
+	h.sendMarkdown(chatID, message)
 }

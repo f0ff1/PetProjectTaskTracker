@@ -12,4 +12,8 @@ type Task struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 	Tags        []string   `json:"tags"`
+
+	DueDate        *time.Time `json:"due_date,omitempty"`
+	ReminderSent   bool       `json:"reminder_sent"`
+	ReminderOffset *string    `json:"reminder_offset,omitempty"`
 }

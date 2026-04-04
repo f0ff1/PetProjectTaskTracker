@@ -50,13 +50,21 @@ func (s *DataBaseRepo) Add(ctx context.Context, userID int, task *model.Task) (*
 	taskTitle := task.Title
 	taskDesc := task.Description
 	taskTags := task.Tags
+	taskDueDate := task.DueDate
+
+	// Если reminderOffset пустой, вставляем NULL, иначе строку
+	var taskReminderOffset *string
+	if task.ReminderOffset != nil && *task.ReminderOffset != "" {
+		taskReminderOffset = task.ReminderOffset
+	}
+
 	task.CompletedAt = nil
 
-	addQuery := `INSERT INTO tasks (user_id, title, description, tags)
-	VALUES ($1, $2, $3, $4)
+	addQuery := `INSERT INTO tasks (user_id, title, description, tags, due_date, reminder_offset)
+	VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''))
 	RETURNING id, user_task_id, created_at`
 
-	err := s.dbPool.QueryRow(ctx, addQuery, userID, taskTitle, taskDesc, taskTags).Scan(
+	err := s.dbPool.QueryRow(ctx, addQuery, userID, taskTitle, taskDesc, taskTags, taskDueDate, taskReminderOffset).Scan(
 		&task.ID,
 		&task.UserTaskID,
 		&task.CreatedAt,
@@ -86,7 +94,7 @@ func (s *DataBaseRepo) DeleteByID(ctx context.Context, userID int, taskID int) e
 }
 
 func (s *DataBaseRepo) GetAllTasksByUser(ctx context.Context, userID int) ([]*model.Task, error) {
-	getAllQuery := `SELECT * FROM tasks WHERE user_id = $1 ORDER BY id`
+	getAllQuery := `SELECT id, user_id, user_task_id, title, description, completed, created_at, completed_at, tags, due_date, reminder_sent, reminder_offset FROM tasks WHERE user_id = $1 ORDER BY id`
 
 	rows, err := s.dbPool.Query(ctx, getAllQuery, userID)
 	if err != nil {
@@ -109,6 +117,9 @@ func (s *DataBaseRepo) GetAllTasksByUser(ctx context.Context, userID int) ([]*mo
 			&task.CreatedAt,
 			&task.CompletedAt,
 			&task.Tags,
+			&task.DueDate,
+			&task.ReminderSent,
+			&task.ReminderOffset,
 		)
 
 		if err != nil {
@@ -125,7 +136,7 @@ func (s *DataBaseRepo) GetAllTasksByUser(ctx context.Context, userID int) ([]*mo
 }
 
 func (s *DataBaseRepo) GetByID(ctx context.Context, userID int, taskID int) (*model.Task, error) {
-	getByIdQuery := `select * from tasks where user_task_id = $1 and user_id = $2`
+	getByIdQuery := `select id, user_id, user_task_id, title, description, completed, created_at, completed_at, tags, due_date, reminder_sent, reminder_offset from tasks where user_task_id = $1 and user_id = $2`
 
 	var task model.Task
 
@@ -139,6 +150,9 @@ func (s *DataBaseRepo) GetByID(ctx context.Context, userID int, taskID int) (*mo
 		&task.CreatedAt,
 		&task.CompletedAt,
 		&task.Tags,
+		&task.DueDate,
+		&task.ReminderSent,
+		&task.ReminderOffset,
 	)
 
 	if err == pgx.ErrNoRows {
@@ -151,7 +165,7 @@ func (s *DataBaseRepo) GetByID(ctx context.Context, userID int, taskID int) (*mo
 }
 
 func (s *DataBaseRepo) GetByTag(ctx context.Context, userID int, tag string) ([]*model.Task, error) {
-	getByTagQuery := `select * from tasks where tags @> array[$1] and user_id = $2`
+	getByTagQuery := `select id, user_id, user_task_id, title, description, completed, created_at, completed_at, tags, due_date, reminder_sent, reminder_offset from tasks where tags @> array[$1] and user_id = $2`
 
 	var tasksWithTag []*model.Task
 	rows, err := s.dbPool.Query(ctx, getByTagQuery, tag, userID)
@@ -173,6 +187,9 @@ func (s *DataBaseRepo) GetByTag(ctx context.Context, userID int, tag string) ([]
 			&task.CreatedAt,
 			&task.CompletedAt,
 			&task.Tags,
+			&task.DueDate,
+			&task.ReminderSent,
+			&task.ReminderOffset,
 		)
 
 		if err != nil {
@@ -199,6 +216,9 @@ func (s *DataBaseRepo) Complete(ctx context.Context, userID int, taskID int) (*m
 		&task.CreatedAt,
 		&task.CompletedAt,
 		&task.Tags,
+		&task.DueDate,
+		&task.ReminderSent,
+		&task.ReminderOffset,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("Ошибка при чтении задач: %w | %w", myErrors.ErrTableIsEmpty, err)
@@ -211,7 +231,7 @@ func (s *DataBaseRepo) Complete(ctx context.Context, userID int, taskID int) (*m
 
 func (s *DataBaseRepo) GetAllTasksForAdmin(ctx context.Context) ([]*model.Task, error) {
 	query := `
-        SELECT id, user_id, title, description, completed, created_at, completed_at, tags
+        SELECT id, user_id, user_task_id, title, description, completed, created_at, completed_at, tags, due_date, reminder_sent, reminder_offset
         FROM tasks
         ORDER BY user_id, id
     `
@@ -235,6 +255,9 @@ func (s *DataBaseRepo) GetAllTasksForAdmin(ctx context.Context) ([]*model.Task, 
 			&task.CreatedAt,
 			&task.CompletedAt,
 			&task.Tags,
+			&task.DueDate,
+			&task.ReminderSent,
+			&task.ReminderOffset,
 		)
 		if err != nil {
 			return nil, err
@@ -242,4 +265,53 @@ func (s *DataBaseRepo) GetAllTasksForAdmin(ctx context.Context) ([]*model.Task, 
 		tasks = append(tasks, task)
 	}
 	return tasks, nil
+}
+
+func (s *DataBaseRepo) GetTasksForReminder(ctx context.Context) ([]*model.Task, error) {
+	query := `SELECT id, user_id, user_task_id, title, description, completed, created_at, completed_at, tags, due_date, reminder_sent, reminder_offset from tasks WHERE due_date IS NOT NULL
+	AND reminder_sent = false
+	AND completed = false
+	AND reminder_offset IS NOT NULL
+	AND reminder_offset != ''
+	AND due_date - (reminder_offset::INTERVAL) <= NOW()`
+
+	rows, err := s.dbPool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var tasks []*model.Task
+
+	for rows.Next() {
+		task := &model.Task{}
+		err := rows.Scan(
+			&task.ID,
+			&task.UserID,
+			&task.UserTaskID,
+			&task.Title,
+			&task.Description,
+			&task.Completed,
+			&task.CreatedAt,
+			&task.CompletedAt,
+			&task.Tags,
+			&task.DueDate,
+			&task.ReminderSent,
+			&task.ReminderOffset,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		tasks = append(tasks, task)
+	}
+
+	return tasks, nil
+}
+
+func (s *DataBaseRepo) MarkReminderSent(ctx context.Context, taskID int) error {
+	query := `UPDATE tasks SET reminder_sent = true where id = $1`
+	_, err := s.dbPool.Exec(ctx, query, taskID)
+	return err
 }

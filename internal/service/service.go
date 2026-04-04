@@ -19,14 +19,22 @@ func NewTaskService(repo repository.Repository) *TaskService {
 	return &TaskService{repo: repo}
 }
 
-func createTask(title, desc string, tags []string) *model.Task {
+func createTask(title, desc string, tags []string, dueDate *time.Time, reminderOffset string) *model.Task {
 	if title == "" {
 		title = generateDefaultName()
 	}
+
+	var reminderOffsetPtr *string
+	if reminderOffset != "" {
+		reminderOffsetPtr = &reminderOffset
+	}
+
 	return &model.Task{
-		Title:       title,
-		Description: desc,
-		Tags:        tags,
+		Title:          title,
+		Description:    desc,
+		Tags:           tags,
+		DueDate:        dueDate,
+		ReminderOffset: reminderOffsetPtr,
 	}
 }
 
@@ -36,7 +44,21 @@ func generateDefaultName() string {
 }
 
 func (s *TaskService) AddTask(ctx context.Context, userID int, title, desc string, tags []string) (*model.Task, error) {
-	task := createTask(title, desc, tags)
+	task := createTask(title, desc, tags, nil, "")
+	return s.repo.Add(ctx, userID, task)
+}
+
+// AddTaskWithReminder добавляет задачу с датой и напоминанием
+func (s *TaskService) AddTaskWithReminder(ctx context.Context, userID int, title, desc string, tags []string, dueDateStr *string, reminderOffset string) (*model.Task, error) {
+	var dueDate *time.Time
+	if dueDateStr != nil {
+		parsedDate, err := time.ParseInLocation("02.01.2006 15:04", *dueDateStr, time.Local)
+		if err != nil {
+			return nil, fmt.Errorf("Ошибка сервиса: %w", customError.ErrWrongDate)
+		}
+		dueDate = &parsedDate
+	}
+	task := createTask(title, desc, tags, dueDate, reminderOffset)
 	return s.repo.Add(ctx, userID, task)
 }
 
@@ -117,4 +139,12 @@ func (s *PostgresTaskService) GetAllTasksForAdmin(ctx context.Context) ([]*model
 
 func (s *PostgresTaskService) GetUserByTelegramID(ctx context.Context, telegramID int64) (*model.User, error) {
 	return s.repo.GetUserByTelegramID(ctx, telegramID)
+}
+
+func (s *PostgresTaskService) GetTasksForReminder(ctx context.Context) ([]*model.Task, error) {
+	return s.repo.GetTasksForReminder(ctx)
+}
+
+func (s *PostgresTaskService) MarkReminderSent(ctx context.Context, taskID int) error {
+	return s.repo.MarkReminderSent(ctx, taskID)
 }

@@ -18,6 +18,7 @@ var (
 	ErrTaskAlredyComplete   = errors.New("Задача уже выполнена")
 	ErrTaskNotFound         = errors.New("Задача не найдена")
 	ErrCantDeleteTask       = errors.New("Невозможно удалить задачу. Возможно, она не существует")
+	ErrWrongDate            = errors.New("Неккоректная дата")
 
 	// Database errors
 	ErrCantConnectToDB   = errors.New("Невозможно подключиться к Базе Данных.")

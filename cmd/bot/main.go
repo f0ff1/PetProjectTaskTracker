@@ -42,6 +42,10 @@ func main() {
 
 	log.Printf("✅ Бот запущен: @%s", bot.Self.UserName)
 
+	// Инициализируем сервис напоминаний
+	reminderService := service.NewRemindereService(taskSvc, extendedSvc, bot)
+	reminderService.StartReminderChecker(ctx, 1*time.Minute) // Проверять каждую минуту
+
 	tgHandler := handler.NewTelegramHandler(bot, taskSvc, extendedSvc)
 
 	errCh := make(chan error, 1)

@@ -81,3 +81,13 @@ ON CONFLICT (telegram_id) DO UPDATE SET
     username = EXCLUDED.username,
     first_name = EXCLUDED.first_name,
     is_admin = true;
+
+
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date TIMESTAMP;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT false;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS reminder_offset VARCHAR(50) DEFAULT '1 day';
+
+CREATE INDEX IF NOT EXISTS idx_tasks_reminder ON tasks(due_date, reminder_sent, user_id)
+WHERE due_date IS NOT NULL AND reminder_sent = false;
+
+CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);

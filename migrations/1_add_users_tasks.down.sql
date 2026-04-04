@@ -14,3 +14,9 @@ DROP INDEX IF EXISTS idx_users_telegram_id;
 
 
 DROP TABLE IF EXISTS users;
+
+DROP INDEX IF EXISTS idx_tasks_reminder;
+DROP INDEX IF EXISTS idx_tasks_due_date;
+ALTER TABLE tasks DROP COLUMN IF EXISTS reminder_offset;
+ALTER TABLE tasks DROP COLUMN IF EXISTS reminder_sent;
+ALTER TABLE tasks DROP COLUMN IF EXISTS due_date;
