@@ -56,6 +56,10 @@ func (s *TaskService) AddTaskWithReminder(ctx context.Context, userID int, title
 		if err != nil {
 			return nil, fmt.Errorf("Ошибка сервиса: %w", customError.ErrWrongDate)
 		}
+		// Проверка что дата исполнения не в прошлом
+		if parsedDate.Before(time.Now()) {
+			return nil, fmt.Errorf("Ошибка сервиса: %w", customError.ErrDueDateInPast)
+		}
 		dueDate = &parsedDate
 	}
 	task := createTask(title, desc, tags, dueDate, reminderOffset)

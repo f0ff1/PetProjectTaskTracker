@@ -3,13 +3,11 @@ package errors
 import "errors"
 
 var (
-	// JSON file errors
 	ErrCantCreateJsonFile = errors.New("Не удалось создать файл JSON")
 	ErrCantReadJsonData   = errors.New("Не удалось прочесть данные из файла JSON")
 	ErrWrongPath          = errors.New("Некорректный путь к созданию / перезаписи файла JSON")
 	ErrCantSaveTaskToJson = errors.New("Не удалось сохранить task в JSON")
 
-	// Task-related errors
 	ErrTasksNotFound        = errors.New("Нет задач для отображения")
 	ErrIdNotExists          = errors.New("Несуществующий ID")
 	ErrWrongTypeID          = errors.New("Неккоректный ID")
@@ -19,8 +17,8 @@ var (
 	ErrTaskNotFound         = errors.New("Задача не найдена")
 	ErrCantDeleteTask       = errors.New("Невозможно удалить задачу. Возможно, она не существует")
 	ErrWrongDate            = errors.New("Неккоректная дата")
+	ErrDueDateInPast        = errors.New("Дата исполнения не может быть в прошлом")
 
-	// Database errors
 	ErrCantConnectToDB   = errors.New("Невозможно подключиться к Базе Данных.")
 	ErrPingEx            = errors.New("Провалена проверка подключения к БД.")
 	ErrCantCreateDBTable = errors.New("Невозможно создать такую таблицу")
@@ -28,28 +26,22 @@ var (
 	ErrCantReadTable     = errors.New("Невозможно прочитать данные из таблицы")
 	ErrTableIsEmpty      = errors.New("Строки не найдены")
 
-	// Repository errors
 	ErrWrongTypeRepo = errors.New("Неверный тип репозитория")
 
-	// Stats errors
 	ErrStatsDoesntWritten = errors.New("Статистика еще не записана")
 
-	// Migration errors
 	ErrCreateMigration  = errors.New("Ошибка создания мигратора")
 	ErrCantUseMigration = errors.New("Ошибка применения миграций")
 
-	// Auth errors
 	ErrUserNotFound   = errors.New("Пользователь не найден")
 	ErrCantCreateUser = errors.New("Невозможно создать пользователя")
 )
 
-// GetUserFriendlyMessage returns a user-friendly error message for display in Telegram
 func GetUserFriendlyMessage(err error) string {
 	if err == nil {
 		return ""
 	}
 
-	// Check for specific errors and return friendly messages
 	switch {
 	case errors.Is(err, ErrTasksNotFound), errors.Is(err, ErrTableIsEmpty):
 		return "📭 Задач не найдено"
@@ -81,11 +73,9 @@ func GetUserFriendlyMessage(err error) string {
 		return "⚠️ Не удалось сохранить задачу. Попробуйте позже"
 	}
 
-	// If it's a wrapped error, try to find the underlying error
 	if cause := errors.Unwrap(err); cause != nil {
 		return GetUserFriendlyMessage(cause)
 	}
 
-	// Generic fallback message
 	return "⚠️ Ой, что-то пошло не так... Попробуйте позже"
 }

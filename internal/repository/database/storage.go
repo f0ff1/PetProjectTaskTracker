@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -45,6 +47,36 @@ func (s *DataBaseRepo) Close() {
 	if s.dbPool != nil {
 		s.dbPool.Close()
 	}
+}
+
+// calculateReminderTime вычисляет время, когда должно быть отправлено напоминание
+func calculateReminderTime(dueDate time.Time, reminderOffset string) (time.Time, error) {
+	reminderOffset = strings.TrimSpace(strings.ToLower(reminderOffset))
+	if len(reminderOffset) < 2 {
+		return time.Time{}, fmt.Errorf("invalid reminder offset format: %s", reminderOffset)
+	}
+
+	lastChar := reminderOffset[len(reminderOffset)-1]
+	numStr := reminderOffset[:len(reminderOffset)-1]
+
+	num, err := strconv.ParseInt(numStr, 10, 64)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid reminder offset number: %s", numStr)
+	}
+
+	var duration time.Duration
+	switch lastChar {
+	case 'm':
+		duration = time.Duration(num) * time.Minute
+	case 'h':
+		duration = time.Duration(num) * time.Hour
+	case 'd':
+		duration = time.Duration(num) * 24 * time.Hour
+	default:
+		return time.Time{}, fmt.Errorf("invalid reminder offset unit: %c", lastChar)
+	}
+
+	return dueDate.Add(-duration), nil
 }
 
 func (s *DataBaseRepo) Add(ctx context.Context, userID int, task *model.Task) (*model.Task, error) {
@@ -275,8 +307,7 @@ func (s *DataBaseRepo) GetTasksForReminder(ctx context.Context) ([]*model.Task, 
 	AND reminder_sent = false
 	AND completed = false
 	AND reminder_offset IS NOT NULL
-	AND reminder_offset != ''
-	AND due_date - (reminder_offset::INTERVAL) <= NOW()`
+	AND reminder_offset != ''`
 
 	rows, err := s.dbPool.Query(ctx, query)
 	if err != nil {
@@ -286,6 +317,7 @@ func (s *DataBaseRepo) GetTasksForReminder(ctx context.Context) ([]*model.Task, 
 	defer rows.Close()
 
 	var tasks []*model.Task
+	var pendingTasks []*model.Task
 
 	for rows.Next() {
 		task := &model.Task{}
@@ -307,7 +339,23 @@ func (s *DataBaseRepo) GetTasksForReminder(ctx context.Context) ([]*model.Task, 
 			return nil, err
 		}
 
-		tasks = append(tasks, task)
+		pendingTasks = append(pendingTasks, task)
+	}
+
+	// Filter tasks based on reminder time in Go to handle timezone correctly
+	now := time.Now()
+	for _, task := range pendingTasks {
+		if task.DueDate == nil || task.ReminderOffset == nil {
+			continue
+		}
+		reminderTime, err := calculateReminderTime(*task.DueDate, *task.ReminderOffset)
+		if err != nil {
+			log.Printf("Error calculating reminder time for task %d: %v", task.ID, err)
+			continue
+		}
+		if now.After(reminderTime) || now.Equal(reminderTime) {
+			tasks = append(tasks, task)
+		}
 	}
 
 	return tasks, nil
