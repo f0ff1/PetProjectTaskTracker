@@ -6,7 +6,6 @@ import (
 	"log"
 	"unicode/utf8"
 
-	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5"
@@ -19,24 +18,6 @@ import (
 type DataBaseRepo struct {
 	dbPool *pgxpool.Pool
 	cache  *statsCache
-}
-
-func runMigrations(connStr string) error {
-	migration, err := migrate.New(
-		"file://../migrations",
-		connStr,
-	)
-
-	if err != nil {
-		return fmt.Errorf("%v : %w", myErrors.ErrCreateMigration, err)
-	}
-
-	defer migration.Close()
-
-	if err := migration.Up(); err != nil && err != migrate.ErrNoChange {
-		return fmt.Errorf("%v : %w", myErrors.ErrCantUseMigration, err)
-	}
-	return nil
 }
 
 func NewPostgresRepo(connStr string) (*DataBaseRepo, error) {
