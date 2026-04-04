@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +19,8 @@ func (h *TelegramHandler) handleAdminTasks(ctx context.Context, chatID int64) {
 
 	tasks, err := h.extService.GetAllTasksForAdmin(ctx)
 	if err != nil {
-		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
+		log.Printf("❌ ERROR [GetAllTasksForAdmin]: %v\n", err)
+		h.sendMessage(chatID, "⚠️ Не удалось получить все задачи. Попробуйте позже", false)
 		return
 	}
 
@@ -66,7 +68,8 @@ func (h *TelegramHandler) handleAdminUsers(ctx context.Context, chatID int64) {
 
 	users, err := h.extService.GetAllUsers(ctx)
 	if err != nil {
-		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
+		log.Printf("❌ ERROR [GetAllUsers]: %v\n", err)
+		h.sendMessage(chatID, "⚠️ Не удалось получить список пользователей. Попробуйте позже", false)
 		return
 	}
 

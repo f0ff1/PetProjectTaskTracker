@@ -129,8 +129,7 @@ func (h *TelegramHandler) handleMessage(ctx context.Context, msg *tgbotapi.Messa
 	// Получаем или создаем пользователя
 	user, err := h.getUser(ctx, chatID, msg)
 	if err != nil {
-		log.Printf("❌ Ошибка получения пользователя: %v", err)
-		h.sendMessage(chatID, "❌ Ошибка авторизации. Попробуйте позже.", false)
+		h.handleAndLogError(chatID, "getUser", err)
 		return
 	}
 
@@ -207,7 +206,7 @@ func (h *TelegramHandler) handleCallback(ctx context.Context, query *tgbotapi.Ca
 
 		task, err := h.taskService.CompleteTask(ctx, user.ID, id)
 		if err != nil {
-			h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
+			h.handleAndLogErrorWithContext(chatID, "CompleteTask", err, user.ID, fmt.Sprintf("TaskID=%d", id))
 			return
 		}
 		h.updateTaskMessage(chatID, messageID, task)
@@ -217,7 +216,7 @@ func (h *TelegramHandler) handleCallback(ctx context.Context, query *tgbotapi.Ca
 		taskID, _ := strconv.Atoi(idStr)
 
 		if err := h.extService.DeleteTask(ctx, user.ID, taskID); err != nil {
-			h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
+			h.handleAndLogErrorWithContext(chatID, "DeleteTask", err, user.ID, fmt.Sprintf("TaskID=%d", taskID))
 			return
 		}
 
@@ -279,7 +278,7 @@ func (h *TelegramHandler) handleDialogState(ctx context.Context, chatID int64, u
 		h.clearState(chatID)
 
 		if err != nil {
-			h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка при создании задачи: %v", err), false)
+			h.handleAndLogErrorWithContext(chatID, "AddTask", err, userID, fmt.Sprintf("Title=%s Tags=%v", pending.Title, pending.Tags))
 			return
 		}
 
@@ -320,7 +319,7 @@ func (h *TelegramHandler) handleFastAdd(ctx context.Context, chatID int64, userI
 
 	task, err := h.taskService.AddTask(ctx, userID, title, "", tags)
 	if err != nil {
-		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
+		h.handleAndLogErrorWithContext(chatID, "AddTask_FastAdd", err, userID, fmt.Sprintf("Title=%s Tags=%v", title, tags))
 		return
 	}
 
@@ -330,7 +329,7 @@ func (h *TelegramHandler) handleFastAdd(ctx context.Context, chatID int64, userI
 func (h *TelegramHandler) handleListCommand(ctx context.Context, chatID int64, userID int) {
 	tasks, err := h.taskService.GetAllTasks(ctx, userID)
 	if err != nil {
-		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
+		h.handleAndLogErrorWithContext(chatID, "GetAllTasks", err, userID, "ListCommand")
 		return
 	}
 
@@ -368,7 +367,7 @@ func (h *TelegramHandler) handleCompleteCommand(ctx context.Context, chatID int6
 
 	task, err := h.taskService.CompleteTask(ctx, userID, taskID)
 	if err != nil {
-		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
+		h.handleAndLogErrorWithContext(chatID, "CompleteTask", err, userID, fmt.Sprintf("TaskID=%d", taskID))
 		return
 	}
 
@@ -389,7 +388,7 @@ func (h *TelegramHandler) handleDeleteCommand(ctx context.Context, chatID int64,
 	}
 
 	if err := h.extService.DeleteTask(ctx, userID, taskID); err != nil {
-		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
+		h.handleAndLogErrorWithContext(chatID, "DeleteTask", err, userID, fmt.Sprintf("TaskID=%d", taskID))
 		return
 	}
 
@@ -411,7 +410,7 @@ func (h *TelegramHandler) handleFindCommand(ctx context.Context, chatID int64, u
 
 	task, err := h.taskService.GetTaskById(ctx, userID, taskID)
 	if err != nil {
-		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
+		h.handleAndLogErrorWithContext(chatID, "GetTaskById", err, userID, fmt.Sprintf("TaskID=%d", taskID))
 		return
 	}
 
@@ -428,7 +427,7 @@ func (h *TelegramHandler) handleTagCommand(ctx context.Context, chatID int64, us
 	tag := parts[1]
 	tasks, err := h.taskService.GetTasksByTag(ctx, userID, tag)
 	if err != nil {
-		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
+		h.handleAndLogErrorWithContext(chatID, "GetTasksByTag", err, userID, fmt.Sprintf("Tag=%s", tag))
 		return
 	}
 
@@ -456,7 +455,7 @@ func (h *TelegramHandler) handleStatsCommand(ctx context.Context, chatID int64, 
 
 	stats, err := h.extService.GetStatsForce(ctx, userID)
 	if err != nil {
-		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
+		h.handleAndLogErrorWithContext(chatID, "GetStatsForce", err, userID, "StatsCommand")
 		return
 	}
 
