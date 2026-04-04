@@ -21,6 +21,9 @@ type DataBaseRepo struct {
 }
 
 func NewPostgresRepo(connStr string) (*DataBaseRepo, error) {
+	if err := runMigrations(connStr); err != nil {
+		log.Printf("Ошибка миграций: %v", err)
+	}
 	dbPool, err := pgxpool.New(context.Background(), connStr)
 	if err != nil {
 		return nil, fmt.Errorf("Ошибка при подключении к БД: %w | %w", myErrors.ErrCantConnectToDB, err)
@@ -29,11 +32,6 @@ func NewPostgresRepo(connStr string) (*DataBaseRepo, error) {
 	if err := dbPool.Ping(context.Background()); err != nil {
 		dbPool.Close()
 		return nil, fmt.Errorf("Ошибка при проверке подключения к БД: %w | %w", myErrors.ErrPingEx, err)
-	}
-
-	if err := runMigrations(connStr); err != nil {
-		dbPool.Close()
-		return nil, err
 	}
 
 	return &DataBaseRepo{
