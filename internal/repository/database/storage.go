@@ -380,8 +380,7 @@ func (s *DataBaseRepo) GetTasksForReminder(ctx context.Context) ([]*model.Task, 
 	now := time.Now()
 
 	// Get local timezone location
-	loc := time.Local
-	log.Printf("[REMINDER DB] Local timezone: %s", loc.String())
+	log.Printf("[REMINDER DB] Local timezone: %s", time.Local.String())
 	log.Printf("[REMINDER DB] Current time: %s (Unix: %d)", now.Format("02.01.2006 15:04:05"), now.Unix())
 
 	for _, task := range pendingTasks {
@@ -391,18 +390,18 @@ func (s *DataBaseRepo) GetTasksForReminder(ctx context.Context) ([]*model.Task, 
 		}
 
 		// Ensure DueDate has timezone info for proper comparison
-		dueDateWithTz := task.DueDate
-		if dueDateWithTz.Location() == time.UTC || dueDateWithTz.Location().String() == "UTC" {
+		dueDate := *task.DueDate
+		if dueDate.Location() == time.UTC || dueDate.Location().String() == "UTC" {
 			// If time is in UTC, convert to local time
-			dueDateWithTz = dueDateWithTz.In(time.Local)
+			dueDate = dueDate.In(time.Local)
 			log.Printf("[REMINDER DB] Task %d (ID: %d): Converted DueDate from UTC to local: %s",
-				task.UserTaskID, task.ID, dueDateWithTz.Format("02.01.2006 15:04:05"))
-		} else if dueDateWithTz.Location() == nil || dueDateWithTz.Location().String() == "" {
+				task.UserTaskID, task.ID, dueDate.Format("02.01.2006 15:04:05"))
+		} else if dueDate.Location() == nil || dueDate.Location().String() == "" {
 			// If timezone is unknown, treat as local time
 			log.Printf("[REMINDER DB] Task %d (ID: %d): DueDate has no timezone info, treating as local", task.UserTaskID, task.ID)
 		}
 
-		reminderTime, err := calculateReminderTime(dueDateWithTz, *task.ReminderOffset)
+		reminderTime, err := calculateReminderTime(dueDate, *task.ReminderOffset)
 		if err != nil {
 			log.Printf("[REMINDER DB] Task %d (ID: %d): Error calculating reminder time: %v", task.UserTaskID, task.ID, err)
 			continue
@@ -410,7 +409,7 @@ func (s *DataBaseRepo) GetTasksForReminder(ctx context.Context) ([]*model.Task, 
 
 		log.Printf("[REMINDER DB] Task %d (ID: %d): DueDate=%s (Unix:%d), ReminderOffset=%s, ReminderTime=%s (Unix:%d), Now=%s (Unix:%d)",
 			task.UserTaskID, task.ID,
-			dueDateWithTz.Format("02.01.2006 15:04:05"), dueDateWithTz.Unix(),
+			dueDate.Format("02.01.2006 15:04:05"), dueDate.Unix(),
 			*task.ReminderOffset,
 			reminderTime.Format("02.01.2006 15:04:05"), reminderTime.Unix(),
 			now.Format("02.01.2006 15:04:05"), now.Unix())
