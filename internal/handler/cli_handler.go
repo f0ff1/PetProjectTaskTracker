@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,13 +21,15 @@ type CLIHandler struct {
 	baseService     *service.TaskService
 	extendedService service.ExtendedTaskService
 	reader          *bufio.Reader
+	userID          int
 }
 
-func NewCLIHandler(service *service.TaskService, extendedSvc service.ExtendedTaskService) *CLIHandler {
+func NewCLIHandler(service *service.TaskService, extendedSvc service.ExtendedTaskService, userID int) *CLIHandler {
 	return &CLIHandler{
 		baseService:     service,
 		extendedService: extendedSvc,
 		reader:          bufio.NewReader(os.Stdin),
+		userID:          userID,
 	}
 }
 
@@ -113,24 +117,22 @@ func (h *CLIHandler) handleChoice(defCtx context.Context, choice string) bool {
 	case "6":
 		// Удаление доступно только для PostgreSQL
 		if h.extendedService != nil {
-
 			h.handleDelete(defCtx)
 		} else {
-			fmt.Println("❌ Удаление задач недоступно для этого типа хранилища")
+			slog.Warn("Удаление задач недоступно для этого типа хранилища")
 		}
 	case "7":
 		// Статистика доступна только для PostgreSQL
 		if h.extendedService != nil {
-
-			h.handleGetStats(defCtx)
+			h.handleStats(defCtx)
 		} else {
-			fmt.Println("❌ Статистика недоступна для этого типа хранилища")
+			slog.Warn("Статистика недоступна для этого типа хранилища")
 		}
 	case "8":
-		fmt.Println("👋 До свидания!")
+		slog.Info("До свидания")
 		return false
 	default:
-		fmt.Println("❌ Неверный пункт. Введите 1-8")
+		slog.Warn("Неверный пункт. Введите 1-8")
 	}
 	return true
 }
@@ -149,37 +151,37 @@ func (h *CLIHandler) handleAdd(defCtx context.Context) {
 	ctx, cancel := context.WithTimeout(defCtx, 1*time.Second)
 	defer cancel()
 
-	task, err := h.baseService.AddTask(ctx, title, description, tags)
+	task, err := h.baseService.AddTask(ctx, h.userID, title, description, tags)
 	if err != nil {
-		fmt.Printf("❌ Ошибка: %v\n", err)
+		slog.Error("Ошибка добавления задачи", "err", err)
 		return
 	}
 	fmt.Printf("\n✅ Задача '%s' добавлена с ID %d\n", task.Title, task.ID)
 }
 
 func (h *CLIHandler) handleDelete(defCtx context.Context) {
-	id := h.readID()
+	taskID := h.readID()
 	ctx, cancel := context.WithTimeout(defCtx, 1*time.Second)
 	defer cancel()
-	err := h.extendedService.DeleteTask(ctx, id)
+	err := h.extendedService.DeleteTask(ctx, h.userID, taskID)
 	if err != nil {
-		fmt.Println("❌ Ошибка: ", err)
+		slog.Error("Ошибка удаления задачи", "err", err, "id", taskID)
 		return
 	}
-	fmt.Printf("✅ Задача с ID %d удалена\n", id)
+	fmt.Printf("✅ Задача с ID %d удалена\n", taskID)
 }
 
 func (h *CLIHandler) handleList(defCtx context.Context) {
 	ctx, cancel := context.WithTimeout(defCtx, 5*time.Second)
 	defer cancel()
-	tasks, err := h.baseService.GetAllTasks(ctx)
+	tasks, err := h.baseService.GetAllTasks(ctx, h.userID)
 	if err != nil {
-		fmt.Println("❌ Ошибка: ", err)
+		slog.Error("Ошибка получения списка задач", "err", err)
 		return
 	}
 
 	if len(tasks) == 0 {
-		fmt.Println("📭 Список задач пуст")
+		slog.Info("Список задач пуст")
 		return
 	}
 
@@ -189,12 +191,12 @@ func (h *CLIHandler) handleList(defCtx context.Context) {
 }
 
 func (h *CLIHandler) handleFindById(defCtx context.Context) {
-	id := h.readID()
+	taskID := h.readID()
 	ctx, cancel := context.WithTimeout(defCtx, 2*time.Second)
 	defer cancel()
-	task, err := h.baseService.GetTaskById(ctx, id)
+	task, err := h.baseService.GetTaskById(ctx, h.userID, taskID)
 	if err != nil {
-		fmt.Printf("❌ Ошибка: %v\n", err)
+		slog.Error("Ошибка при поиске задачи по ID", "err", err, "id", taskID)
 		return
 	}
 
@@ -206,14 +208,14 @@ func (h *CLIHandler) handleFineByTag(defCtx context.Context) {
 	tag := strings.TrimSpace(h.readInput())
 	ctx, cancel := context.WithTimeout(defCtx, 1*time.Second)
 	defer cancel()
-	tasks, err := h.baseService.GetTasksByTag(ctx, tag)
+	tasks, err := h.baseService.GetTasksByTag(ctx, h.userID, tag)
 	if err != nil {
-		fmt.Printf("❌ Ошибка: %v\n", err)
+		slog.Error("Ошибка при поиске задач по тегу", "err", err, "tag", tag)
 		return
 	}
 
 	if len(tasks) == 0 {
-		fmt.Printf("📭 Задач с тегом '%s' не найдено\n", tag)
+		slog.Info("Задач с тегом не найдено", "tag", tag)
 		return
 	}
 
@@ -223,38 +225,42 @@ func (h *CLIHandler) handleFineByTag(defCtx context.Context) {
 }
 
 func (h *CLIHandler) handleComplete(defCtx context.Context) {
-	id := h.readID()
+	taskID := h.readID()
 
 	ctx, cancel := context.WithTimeout(defCtx, 1*time.Second)
 	defer cancel()
 
-	task, err := h.baseService.CompleteTask(ctx, id)
+	task, err := h.baseService.CompleteTask(ctx, h.userID, taskID)
 	if err != nil {
-		fmt.Printf("❌ Ошибка: %v\n", err)
+		slog.Error("Ошибка при отмечании задачи как выполненной", "err", err, "id", taskID)
 		return
 	}
 	fmt.Printf("✅ Задача '%s' отмечена как выполненная\n", task.Title)
 }
 
-func (h *CLIHandler) handleGetStats(defCtx context.Context) {
-	ctx, cancel := context.WithTimeout(defCtx, 3*time.Second)
-	defer cancel()
-	stats, err := h.extendedService.GetStats(ctx)
+func (h *CLIHandler) handleStats(defCtx context.Context) {
+	slog.Info("Загрузка статистики")
+	stats, lastUpdated, isUpdating, err := h.extendedService.GetStatsWithInfo(defCtx, h.userID)
 	if err != nil {
-		fmt.Printf("❌ Ошибка при получении статистики: %v\n", err)
+		slog.Error("Ошибка получения статистики", "err", err)
 		return
 	}
 
-	// if len(stats) == 0 {
-	// 	fmt.Println("📊 Статистика недоступна или нет данных")
-	// 	return
-	// }
+	if isUpdating {
+		slog.Info("Статистика обновляется в фоне")
+	}
 
-	// fmt.Println("\n📊 ТОП-3 ПОПУЛЯРНЫХ ТЕГА:")
-	// for i, stat := range stats {
-	// 	fmt.Printf("  %d. %s\n", i+1, stat)
-	// }
-	// fmt.Println()
+	if time.Since(lastUpdated) > 5*time.Minute {
+		slog.Warn("Данные статистики могут быть устаревшими", "lastUpdated", lastUpdated)
+	}
+
+	fmt.Printf("📅 Последнее обновление: %s\n", lastUpdated.Format("15:04:05"))
+
+	h.printStats(stats)
+}
+
+func (h *CLIHandler) printStats(stats *model.TaskStats) {
+
 	// Заголовок
 	fmt.Println("\n" + strings.Repeat("=", 60))
 	fmt.Println("📊  ДЕТАЛЬНАЯ СТАТИСТИКА ЗАДАЧ  📊")
@@ -262,95 +268,63 @@ func (h *CLIHandler) handleGetStats(defCtx context.Context) {
 
 	// 1. Основная статистика
 	fmt.Println("\n📈 ОСНОВНАЯ СТАТИСТИКА:")
-	fmt.Printf("   ├─ Всего задач:      %d\n", stats.TotalTasks)
-	fmt.Printf("   ├─ ✅ Выполнено:      %d (%.1f%%)\n",
-		stats.CompletedTasks, stats.CompletionRate)
-	fmt.Printf("   ├─ ⏳ Ожидает:        %d\n", stats.PendingTasks)
-	fmt.Printf("   └─ 🏷️ Уникальных тегов: %d\n", stats.TotalUniqueTags)
+	fmt.Printf("   ├─ Всего задач:      %d\n", stats.Total)
+	fmt.Printf("   ├─ ✅ Выполнено:      %d (%.1f%%)\n", stats.Completed, stats.Rate)
+	fmt.Printf("   ├─ ⏳ Ожидает:        %d\n", stats.Pending)
 
-	// 2. Временная статистика
-	if stats.AvgCompletionTime > 0 {
-		hours := int(stats.AvgCompletionTime)
-		minutes := int((stats.AvgCompletionTime - float64(hours)) * 60)
-		fmt.Printf("\n⏱️ ВРЕМЯ ВЫПОЛНЕНИЯ:\n")
-		fmt.Printf("   └─ Среднее: %d ч %d мин\n", hours, minutes)
-	}
-
-	// 3. Топ-теги
+	// 2. Топ-теги
 	if len(stats.TopTags) > 0 {
 		fmt.Println("\n🏷️ ПОПУЛЯРНЫЕ ТЕГИ:")
 		for i, tag := range stats.TopTags {
-			bar := h.createBar(tag.UsageCount, stats.TotalTasks, 20)
-			fmt.Printf("   %d. %-12s %s (%d задач)\n",
-				i+1, tag.Tag, bar, tag.UsageCount)
+			bar := h.createBar(tag.Count, stats.Total, 20)
+			fmt.Printf("   %d. %-12s %s (%d задач)\n", i+1, tag.Name, bar, tag.Count)
 		}
+	} else {
+		fmt.Println("\n🏷️ ПОПУЛЯРНЫЕ ТЕГИ:")
+		fmt.Println("   └─ Нет тегов")
 	}
 
-	// 4. Активность по дням (график)
-	if len(stats.TasksByDay) > 0 {
+	// 4. Самый продуктивный день
+	if stats.BestDay != "" {
+		fmt.Printf("\n🔥 САМЫЙ ПРОДУКТИВНЫЙ ДЕНЬ: %s\n", stats.BestDay)
+	}
+
+	// 5. Активность за последние 7 дней
+	if len(stats.Last7Days) > 0 {
 		fmt.Println("\n📅 АКТИВНОСТЬ ПО ДНЯМ (последние 7 дней):")
-		maxCount := h.getMaxCount(stats.TasksByDay)
 
-		// Показываем только последние 7 дней
-		startIdx := len(stats.TasksByDay) - 7
-		if startIdx < 0 {
-			startIdx = 0
-		}
-
-		for i := startIdx; i < len(stats.TasksByDay); i++ {
-			day := stats.TasksByDay[i]
-			bar := h.createBar(day.Count, maxCount, 30)
-			fmt.Printf("   %s %s (%d)\n", day.Date, bar, day.Count)
-		}
-	}
-
-	// 5. Самый продуктивный день
-	if stats.MostProductiveDay != "" {
-		fmt.Printf("\n🔥 САМЫЙ ПРОДУКТИВНЫЙ ДЕНЬ: %s\n", stats.MostProductiveDay)
-	}
-
-	// 6. Распределение по часам
-	if len(stats.TasksByHour) > 0 {
-		fmt.Println("\n⏰ АКТИВНОСТЬ ПО ЧАСАМ:")
-		maxCount := h.getMaxHourCount(stats.TasksByHour)
-
-		// Создаем график для 24 часов
-		hourMap := make(map[int]int)
-		for _, h := range stats.TasksByHour {
-			hourMap[h.Hour] = h.Count
-		}
-
-		for hour := 0; hour < 24; hour++ {
-			count := hourMap[hour]
-			if count > 0 {
-				bar := h.createBar(count, maxCount, 30)
-				fmt.Printf("   %02d:00 %s (%d задач)\n", hour, bar, count)
+		// Находим максимальное значение для масштабирования графика
+		maxCount := 0
+		for _, count := range stats.Last7Days {
+			if count > maxCount {
+				maxCount = count
 			}
 		}
-	}
 
-	// 7. Распределение по дням недели
-	if len(stats.TasksByWeekday) > 0 {
-		fmt.Println("\n📆 РАСПРЕДЕЛЕНИЕ ПО ДНЯМ НЕДЕЛИ:")
-		maxCount := h.getMaxWeekdayCount(stats.TasksByWeekday)
-
-		for _, wd := range stats.TasksByWeekday {
-			bar := h.createBar(wd.Count, maxCount, 25)
-			fmt.Printf("   %-10s %s (%d задач)\n", wd.Weekday, bar, wd.Count)
+		// Сортируем дни (от старых к новым или наоборот)
+		days := make([]string, 0, len(stats.Last7Days))
+		for day := range stats.Last7Days {
+			days = append(days, day)
 		}
-	}
+		sort.Strings(days) // сортируем по дате (формат YYYY-MM-DD)
 
-	// 8. Статистика выполнения по дням
-	if len(stats.CompletionByDay) > 0 {
-		fmt.Println("\n✅ ВЫПОЛНЕННЫЕ ЗАДАЧИ ПО ДНЯМ (последние 7 дней):")
-		startIdx := len(stats.CompletionByDay) - 7
-		if startIdx < 0 {
-			startIdx = 0
+		// Показываем последние 7 дней
+		startIdx := 0
+		if len(days) > 7 {
+			startIdx = len(days) - 7
 		}
 
-		for i := startIdx; i < len(stats.CompletionByDay); i++ {
-			day := stats.CompletionByDay[i]
-			fmt.Printf("   %s: %d задач\n", day.Date, day.Count)
+		for i := startIdx; i < len(days); i++ {
+			day := days[i]
+			count := stats.Last7Days[day]
+			bar := h.createBar(count, maxCount, 30)
+
+			// Форматируем дату для красивого вывода
+			formattedDay := day
+			if t, err := time.Parse("2006-01-02", day); err == nil {
+				formattedDay = t.Format("02 Jan")
+			}
+			fmt.Printf("   %-10s %s (%d)\n", formattedDay, bar, count)
 		}
 	}
 
@@ -359,7 +333,11 @@ func (h *CLIHandler) handleGetStats(defCtx context.Context) {
 
 // Всякая доп хуйня
 func (h *CLIHandler) readInput() string {
-	input, _ := h.reader.ReadString('\n')
+	input, err := h.reader.ReadString('\n')
+	if err != nil {
+		slog.Error("Ошибка чтения ввода", "err", err)
+		return ""
+	}
 	return strings.TrimSpace(input)
 }
 
@@ -369,7 +347,7 @@ func (h *CLIHandler) readID() int {
 
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		fmt.Printf("❌ Ошибка: %v\n", err)
+		slog.Error("Ошибка преобразования ID", "err", err, "input", idStr)
 		return 0
 	}
 
@@ -455,34 +433,4 @@ func (h *CLIHandler) createBar(value, max int, width int) string {
 
 	bar := "[" + strings.Repeat("█", filled) + strings.Repeat("░", width-filled) + "]"
 	return bar
-}
-
-func (h *CLIHandler) getMaxCount(dailyStats []model.DailyStat) int {
-	max := 0
-	for _, ds := range dailyStats {
-		if ds.Count > max {
-			max = ds.Count
-		}
-	}
-	return max
-}
-
-func (h *CLIHandler) getMaxHourCount(hourlyStats []model.HourlyStat) int {
-	max := 0
-	for _, hs := range hourlyStats {
-		if hs.Count > max {
-			max = hs.Count
-		}
-	}
-	return max
-}
-
-func (h *CLIHandler) getMaxWeekdayCount(weekdayStats []model.WeekdayStat) int {
-	max := 0
-	for _, ws := range weekdayStats {
-		if ws.Count > max {
-			max = ws.Count
-		}
-	}
-	return max
 }

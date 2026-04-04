@@ -24,7 +24,7 @@ func NewInMemoryRepo() *InMemoryRepo {
 	}
 }
 
-func (iM *InMemoryRepo) Add(ctx context.Context, task *model.Task) (*model.Task, error) {
+func (iM *InMemoryRepo) Add(ctx context.Context, userID int, task *model.Task) (*model.Task, error) {
 	iM.mu.Lock()
 	defer iM.mu.Unlock()
 
@@ -38,7 +38,7 @@ func (iM *InMemoryRepo) Add(ctx context.Context, task *model.Task) (*model.Task,
 	return task, nil
 }
 
-func (iM *InMemoryRepo) GetAll(ctx context.Context) ([]*model.Task, error) {
+func (iM *InMemoryRepo) GetAllTasksByUser(ctx context.Context, userID int) ([]*model.Task, error) {
 	iM.mu.RLock()
 	defer iM.mu.RUnlock()
 
@@ -51,18 +51,18 @@ func (iM *InMemoryRepo) GetAll(ctx context.Context) ([]*model.Task, error) {
 
 }
 
-func (iM *InMemoryRepo) GetByID(ctx context.Context, id int) (*model.Task, error) {
+func (iM *InMemoryRepo) GetByID(ctx context.Context, userID int, taskID int) (*model.Task, error) {
 	iM.mu.RLock()
 	defer iM.mu.RUnlock()
 
-	task, exists := iM.tasks[id]
+	task, exists := iM.tasks[taskID]
 	if !exists {
-		return nil, fmt.Errorf("Задача с ID %d не найдена: %w", id, myErrors.ErrIdNotExists)
+		return nil, fmt.Errorf("Задача с ID %d не найдена: %w", taskID, myErrors.ErrIdNotExists)
 	}
 	return task, nil
 }
 
-func (iM *InMemoryRepo) GetByTag(ctx context.Context, tag string) ([]*model.Task, error) {
+func (iM *InMemoryRepo) GetByTag(ctx context.Context, userID int, tag string) ([]*model.Task, error) {
 	iM.mu.RLock()
 	defer iM.mu.RUnlock()
 
@@ -82,17 +82,17 @@ func (iM *InMemoryRepo) GetByTag(ctx context.Context, tag string) ([]*model.Task
 
 }
 
-func (iM *InMemoryRepo) Complete(ctx context.Context, id int) (*model.Task, error) {
+func (iM *InMemoryRepo) Complete(ctx context.Context, userID int, taskID int) (*model.Task, error) {
 	iM.mu.Lock()
 	defer iM.mu.Unlock()
 
-	task, exists := iM.tasks[id]
+	task, exists := iM.tasks[taskID]
 	if !exists {
-		return nil, fmt.Errorf("Задача с ID %d не найдена: %w", id, myErrors.ErrIdNotExists)
+		return nil, fmt.Errorf("Задача с ID %d не найдена: %w", taskID, myErrors.ErrIdNotExists)
 	}
 
 	if task.Completed {
-		return nil, fmt.Errorf("Задача с ID %d уже завершена: %w", id, myErrors.ErrTaskAlredyComplete)
+		return nil, fmt.Errorf("Задача с ID %d уже завершена: %w", taskID, myErrors.ErrTaskAlredyComplete)
 	}
 
 	completeTime := time.Now()
@@ -102,7 +102,7 @@ func (iM *InMemoryRepo) Complete(ctx context.Context, id int) (*model.Task, erro
 
 }
 
-func (iM *InMemoryRepo) DeleteByID(ctx context.Context, id int) error {
+func (iM *InMemoryRepo) DeleteByID(ctx context.Context, userID int, id int) error {
 	iM.mu.Lock()
 	defer iM.mu.Unlock()
 

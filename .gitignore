@@ -1,16 +1,18 @@
-# .gitignore
+# Локальные env файлы
 .env
 .env.local
 .env.*.local
 
-# Файлы с конфигурацией
-config/config.go
-config.local.*
-*.secret.env
-dbconfig.env
-.env
-*.env *.env
-*.env
-*.env.*
-dbconfig.env
-dbconfig.env.*
+# Railway не использует .env файлы, но на всякий случай
+.env.railway
+
+# Бинарники
+/bot
+*.exe
+
+# IDE
+.idea/
+.vscode/
+
+# Логи
+*.log
