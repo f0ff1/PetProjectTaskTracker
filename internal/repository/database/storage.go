@@ -102,13 +102,13 @@ func (s *DataBaseRepo) GetAllTasksByUser(ctx context.Context, userID int) ([]*mo
 		err := rows.Scan(
 			&task.ID,
 			&task.UserID,
+			&task.UserTaskID,
 			&task.Title,
 			&task.Description,
 			&task.Completed,
 			&task.CreatedAt,
 			&task.CompletedAt,
 			&task.Tags,
-			&task.UserTaskID,
 		)
 
 		if err != nil {
@@ -132,13 +132,13 @@ func (s *DataBaseRepo) GetByID(ctx context.Context, userID int, taskID int) (*mo
 	err := s.dbPool.QueryRow(ctx, getByIdQuery, taskID, userID).Scan(
 		&task.ID,
 		&task.UserID,
+		&task.UserTaskID,
 		&task.Title,
 		&task.Description,
 		&task.Completed,
 		&task.CreatedAt,
 		&task.CompletedAt,
 		&task.Tags,
-		&task.UserTaskID,
 	)
 
 	if err == pgx.ErrNoRows {
@@ -166,13 +166,13 @@ func (s *DataBaseRepo) GetByTag(ctx context.Context, userID int, tag string) ([]
 		err := rows.Scan(
 			&task.ID,
 			&task.UserID,
+			&task.UserTaskID,
 			&task.Title,
 			&task.Description,
 			&task.Completed,
 			&task.CreatedAt,
 			&task.CompletedAt,
 			&task.Tags,
-			&task.UserTaskID,
 		)
 
 		if err != nil {
@@ -192,13 +192,13 @@ func (s *DataBaseRepo) Complete(ctx context.Context, userID int, taskID int) (*m
 	err := s.dbPool.QueryRow(ctx, completeQuery, taskID, userID).Scan(
 		&task.ID,
 		&task.UserID,
+		&task.UserTaskID,
 		&task.Title,
 		&task.Description,
 		&task.Completed,
 		&task.CreatedAt,
 		&task.CompletedAt,
 		&task.Tags,
-		&task.UserTaskID,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("Ошибка при чтении задач: %w | %w", myErrors.ErrTableIsEmpty, err)
@@ -228,13 +228,13 @@ func (s *DataBaseRepo) GetAllTasksForAdmin(ctx context.Context) ([]*model.Task, 
 		err := rows.Scan(
 			&task.ID,
 			&task.UserID,
+			&task.UserTaskID,
 			&task.Title,
 			&task.Description,
 			&task.Completed,
 			&task.CreatedAt,
 			&task.CompletedAt,
 			&task.Tags,
-			&task.UserTaskID,
 		)
 		if err != nil {
 			return nil, err
