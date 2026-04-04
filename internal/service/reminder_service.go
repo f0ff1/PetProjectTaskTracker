@@ -43,17 +43,20 @@ func (s *ReminderService) StartReminderChecker(ctx context.Context, interval tim
 }
 
 func (s *ReminderService) checkAndSendRimenders(ctx context.Context) {
+	log.Printf("[REMINDER CHECK] Starting check at %s", time.Now().Format("02.01.2006 15:04:05"))
+
 	tasks, err := s.extService.GetTasksForReminder(ctx)
 	if err != nil {
-		log.Printf("Ошибка получения задач для напоминаний: %v", err)
+		log.Printf("[REMINDER CHECK] Error getting tasks: %v", err)
 		return
 	}
 
 	if len(tasks) == 0 {
+		log.Printf("[REMINDER CHECK] No tasks to remind")
 		return
 	}
 
-	log.Printf("Найдено %d задач для напоминания", len(tasks))
+	log.Printf("[REMINDER CHECK] Found %d tasks for reminder", len(tasks))
 
 	for _, task := range tasks {
 		s.sendReminder(ctx, task)
@@ -61,14 +64,17 @@ func (s *ReminderService) checkAndSendRimenders(ctx context.Context) {
 }
 
 func (s *ReminderService) sendReminder(ctx context.Context, task *model.Task) {
+	log.Printf("[REMINDER SEND] Sending reminder for task %d (ID: %d), Title: %s", task.UserTaskID, task.ID, task.Title)
+
 	user, err := s.extService.GetUserByID(ctx, task.UserID)
 
 	if err != nil {
-		log.Printf("Не найден пользователь для задачи #%d: %v", task.ID, err)
+		log.Printf("[REMINDER SEND] User not found for task #%d: %v", task.ID, err)
 		return
 	}
 
 	if task.DueDate == nil {
+		log.Printf("[REMINDER SEND] No DueDate for task %d", task.ID)
 		return
 	}
 

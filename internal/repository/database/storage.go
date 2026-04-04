@@ -76,7 +76,14 @@ func calculateReminderTime(dueDate time.Time, reminderOffset string) (time.Time,
 		return time.Time{}, fmt.Errorf("invalid reminder offset unit: %c", lastChar)
 	}
 
-	return dueDate.Add(-duration), nil
+	result := dueDate.Add(-duration)
+	log.Printf("[REMINDER CALC] DueDate=%s, Offset=%s(num=%d, unit=%c, duration=%v) => ReminderTime=%s",
+		dueDate.Format("02.01.2006 15:04:05"),
+		reminderOffset,
+		num, lastChar, duration,
+		result.Format("02.01.2006 15:04:05"))
+
+	return result, nil
 }
 
 func (s *DataBaseRepo) Add(ctx context.Context, userID int, task *model.Task) (*model.Task, error) {
@@ -94,6 +101,21 @@ func (s *DataBaseRepo) Add(ctx context.Context, userID int, task *model.Task) (*
 	task.CompletedAt = nil
 	task.CreatedAt = time.Now()
 
+	log.Printf("[DB ADD] Saving task: Title=%s, DueDate=%s, ReminderOffset=%s",
+		taskTitle,
+		func() string {
+			if taskDueDate != nil {
+				return taskDueDate.Format("02.01.2006 15:04:05")
+			}
+			return "nil"
+		}(),
+		func() string {
+			if taskReminderOffset != nil {
+				return *taskReminderOffset
+			}
+			return "nil"
+		}())
+
 	addQuery := `INSERT INTO tasks (user_id, title, description, tags, due_date, reminder_offset, created_at)
 	VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7)
 	RETURNING id, user_task_id, created_at`
@@ -106,6 +128,16 @@ func (s *DataBaseRepo) Add(ctx context.Context, userID int, task *model.Task) (*
 	if err != nil {
 		return nil, fmt.Errorf("Ошибка во время добавления задачи: %w | %w", myErrors.ErrCantSaveTaskToDB, err)
 	}
+
+	log.Printf("[DB ADD] Task saved successfully: ID=%d, UserTaskID=%d, ReminderOffset=%s",
+		task.ID, task.UserTaskID,
+		func() string {
+			if taskReminderOffset != nil {
+				return *taskReminderOffset
+			}
+			return "nil"
+		}())
+
 	task.UserID = userID
 	log.Printf("Title bytes: % x", []byte(task.Title))
 	log.Printf("Title valid UTF-8: %v", utf8.ValidString(task.Title))
@@ -342,22 +374,58 @@ func (s *DataBaseRepo) GetTasksForReminder(ctx context.Context) ([]*model.Task, 
 		pendingTasks = append(pendingTasks, task)
 	}
 
+	log.Printf("[REMINDER DB] Found %d pending tasks from DB", len(pendingTasks))
+
 	// Filter tasks based on reminder time in Go to handle timezone correctly
 	now := time.Now()
+
+	// Get local timezone location
+	loc := time.Local
+	log.Printf("[REMINDER DB] Local timezone: %s", loc.String())
+	log.Printf("[REMINDER DB] Current time: %s (Unix: %d)", now.Format("02.01.2006 15:04:05"), now.Unix())
+
 	for _, task := range pendingTasks {
 		if task.DueDate == nil || task.ReminderOffset == nil {
+			log.Printf("[REMINDER DB] Task %d (ID: %d): Skipping - missing DueDate or ReminderOffset", task.UserTaskID, task.ID)
 			continue
 		}
-		reminderTime, err := calculateReminderTime(*task.DueDate, *task.ReminderOffset)
+
+		// Ensure DueDate has timezone info for proper comparison
+		dueDateWithTz := task.DueDate
+		if dueDateWithTz.Location() == time.UTC || dueDateWithTz.Location().String() == "UTC" {
+			// If time is in UTC, convert to local time
+			dueDateWithTz = dueDateWithTz.In(time.Local)
+			log.Printf("[REMINDER DB] Task %d (ID: %d): Converted DueDate from UTC to local: %s",
+				task.UserTaskID, task.ID, dueDateWithTz.Format("02.01.2006 15:04:05"))
+		} else if dueDateWithTz.Location() == nil || dueDateWithTz.Location().String() == "" {
+			// If timezone is unknown, treat as local time
+			log.Printf("[REMINDER DB] Task %d (ID: %d): DueDate has no timezone info, treating as local", task.UserTaskID, task.ID)
+		}
+
+		reminderTime, err := calculateReminderTime(dueDateWithTz, *task.ReminderOffset)
 		if err != nil {
-			log.Printf("Error calculating reminder time for task %d: %v", task.ID, err)
+			log.Printf("[REMINDER DB] Task %d (ID: %d): Error calculating reminder time: %v", task.UserTaskID, task.ID, err)
 			continue
 		}
+
+		log.Printf("[REMINDER DB] Task %d (ID: %d): DueDate=%s (Unix:%d), ReminderOffset=%s, ReminderTime=%s (Unix:%d), Now=%s (Unix:%d)",
+			task.UserTaskID, task.ID,
+			dueDateWithTz.Format("02.01.2006 15:04:05"), dueDateWithTz.Unix(),
+			*task.ReminderOffset,
+			reminderTime.Format("02.01.2006 15:04:05"), reminderTime.Unix(),
+			now.Format("02.01.2006 15:04:05"), now.Unix())
+
 		if now.After(reminderTime) || now.Equal(reminderTime) {
+			log.Printf("[REMINDER DB] Task %d (ID: %d): MATCH! Adding to send list (now=%d >= reminderTime=%d)",
+				task.UserTaskID, task.ID, now.Unix(), reminderTime.Unix())
 			tasks = append(tasks, task)
+		} else {
+			log.Printf("[REMINDER DB] Task %d (ID: %d): NOT YET (now=%d < reminderTime=%d, diff=%d seconds)",
+				task.UserTaskID, task.ID, now.Unix(), reminderTime.Unix(), reminderTime.Unix()-now.Unix())
 		}
 	}
 
+	log.Printf("[REMINDER DB] Filtered to %d tasks ready for reminder", len(tasks))
 	return tasks, nil
 }
 

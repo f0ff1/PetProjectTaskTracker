@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"math/rand"
 	"time"
 
@@ -62,6 +63,17 @@ func (s *TaskService) AddTaskWithReminder(ctx context.Context, userID int, title
 		}
 		dueDate = &parsedDate
 	}
+
+	log.Printf("[SERVICE ADD] Adding task with reminder: Title=%s, DueDate=%v, ReminderOffset=%s",
+		title,
+		func() string {
+			if dueDate != nil {
+				return dueDate.Format("02.01.2006 15:04:05")
+			}
+			return "nil"
+		}(),
+		reminderOffset)
+
 	task := createTask(title, desc, tags, dueDate, reminderOffset)
 	return s.repo.Add(ctx, userID, task)
 }
