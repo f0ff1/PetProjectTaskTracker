@@ -67,32 +67,34 @@ func (s *DataBaseRepo) Close() {
 	}
 }
 
-func (s *DataBaseRepo) Add(ctx context.Context, task *model.Task) (*model.Task, error) {
+func (s *DataBaseRepo) Add(ctx context.Context, userID int, task *model.Task) (*model.Task, error) {
 	taskTitle := task.Title
 	taskDesc := task.Description
 	taskTags := task.Tags
 	task.CompletedAt = nil
-	addQuery := `INSERT INTO tasks (title, description, tags)
-	VALUES ($1, $2, $3)
-	RETURNING id, created_at`
 
-	err := s.dbPool.QueryRow(ctx, addQuery, taskTitle, taskDesc, taskTags).Scan(
+	addQuery := `INSERT INTO tasks (user_id, title, description, tags)
+	VALUES ($1, $2, $3, $4)
+	RETURNING id, user_task_id, created_at`
+
+	err := s.dbPool.QueryRow(ctx, addQuery, userID, taskTitle, taskDesc, taskTags).Scan(
 		&task.ID,
+		&task.UserTaskID,
 		&task.CreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("Ошибка во время добавления задачи: %w | %w", myErrors.ErrCantSaveTaskToDB, err)
 	}
-
+	task.UserID = userID
 	log.Printf("Title bytes: % x", []byte(task.Title))
 	log.Printf("Title valid UTF-8: %v", utf8.ValidString(task.Title))
 
 	return task, nil
 }
 
-func (s *DataBaseRepo) DeleteByID(ctx context.Context, id int) error {
-	deleteQuery := `DELETE FROM tasks where id = $1`
-	row, err := s.dbPool.Exec(ctx, deleteQuery, id)
+func (s *DataBaseRepo) DeleteByID(ctx context.Context, userID int, taskID int) error {
+	deleteQuery := `DELETE FROM tasks where user_task_id = $1 and user_id = $2`
+	row, err := s.dbPool.Exec(ctx, deleteQuery, taskID, userID)
 	if err != nil {
 		return fmt.Errorf("Ошибка при удалении задачи: %w | %w", myErrors.ErrCantDeleteTask, err)
 	}
@@ -104,10 +106,10 @@ func (s *DataBaseRepo) DeleteByID(ctx context.Context, id int) error {
 	return nil
 }
 
-func (s *DataBaseRepo) GetAll(ctx context.Context) ([]*model.Task, error) {
-	getAllQuery := `SELECT * FROM tasks ORDER BY id`
+func (s *DataBaseRepo) GetAllTasksByUser(ctx context.Context, userID int) ([]*model.Task, error) {
+	getAllQuery := `SELECT * FROM tasks WHERE user_id = $1 ORDER BY id`
 
-	rows, err := s.dbPool.Query(ctx, getAllQuery)
+	rows, err := s.dbPool.Query(ctx, getAllQuery, userID)
 	if err != nil {
 		return nil, fmt.Errorf("Ошибка при чтении задач: %w | %w", myErrors.ErrCantReadTable, err)
 	}
@@ -120,12 +122,14 @@ func (s *DataBaseRepo) GetAll(ctx context.Context) ([]*model.Task, error) {
 
 		err := rows.Scan(
 			&task.ID,
+			&task.UserID,
 			&task.Title,
 			&task.Description,
 			&task.Completed,
 			&task.CreatedAt,
 			&task.CompletedAt,
 			&task.Tags,
+			&task.UserTaskID,
 		)
 
 		if err != nil {
@@ -141,19 +145,21 @@ func (s *DataBaseRepo) GetAll(ctx context.Context) ([]*model.Task, error) {
 	return tasks, nil
 }
 
-func (s *DataBaseRepo) GetByID(ctx context.Context, id int) (*model.Task, error) {
-	getByIdQuery := `select * from tasks where id = $1`
+func (s *DataBaseRepo) GetByID(ctx context.Context, userID int, taskID int) (*model.Task, error) {
+	getByIdQuery := `select * from tasks where user_task_id = $1 and user_id = $2`
 
 	var task model.Task
 
-	err := s.dbPool.QueryRow(ctx, getByIdQuery, id).Scan(
+	err := s.dbPool.QueryRow(ctx, getByIdQuery, taskID, userID).Scan(
 		&task.ID,
+		&task.UserID,
 		&task.Title,
 		&task.Description,
 		&task.Completed,
 		&task.CreatedAt,
 		&task.CompletedAt,
 		&task.Tags,
+		&task.UserTaskID,
 	)
 
 	if err == pgx.ErrNoRows {
@@ -165,11 +171,11 @@ func (s *DataBaseRepo) GetByID(ctx context.Context, id int) (*model.Task, error)
 	return &task, nil
 }
 
-func (s *DataBaseRepo) GetByTag(ctx context.Context, tag string) ([]*model.Task, error) {
-	getByTagQuery := `select * from tasks where tags @> array[$1]`
+func (s *DataBaseRepo) GetByTag(ctx context.Context, userID int, tag string) ([]*model.Task, error) {
+	getByTagQuery := `select * from tasks where tags @> array[$1] and user_id = $2`
 
 	var tasksWithTag []*model.Task
-	rows, err := s.dbPool.Query(ctx, getByTagQuery, tag)
+	rows, err := s.dbPool.Query(ctx, getByTagQuery, tag, userID)
 	if err != nil {
 		return nil, fmt.Errorf("Ошибка при чтении задач: %w | %w", myErrors.ErrCantReadTable, err)
 	}
@@ -180,12 +186,14 @@ func (s *DataBaseRepo) GetByTag(ctx context.Context, tag string) ([]*model.Task,
 
 		err := rows.Scan(
 			&task.ID,
+			&task.UserID,
 			&task.Title,
 			&task.Description,
 			&task.Completed,
 			&task.CreatedAt,
 			&task.CompletedAt,
 			&task.Tags,
+			&task.UserTaskID,
 		)
 
 		if err != nil {
@@ -198,18 +206,20 @@ func (s *DataBaseRepo) GetByTag(ctx context.Context, tag string) ([]*model.Task,
 	return tasksWithTag, nil
 }
 
-func (s *DataBaseRepo) Complete(ctx context.Context, id int) (*model.Task, error) {
-	completeQuery := `update tasks set completed = true, completed_at = CURRENT_TIMESTAMP where id = $1 RETURNING *`
+func (s *DataBaseRepo) Complete(ctx context.Context, userID int, taskID int) (*model.Task, error) {
+	completeQuery := `update tasks set completed = true, completed_at = CURRENT_TIMESTAMP where user_task_id = $1 and user_id = $2 RETURNING *`
 
 	var task model.Task
-	err := s.dbPool.QueryRow(ctx, completeQuery, id).Scan(
+	err := s.dbPool.QueryRow(ctx, completeQuery, taskID, userID).Scan(
 		&task.ID,
+		&task.UserID,
 		&task.Title,
 		&task.Description,
 		&task.Completed,
 		&task.CreatedAt,
 		&task.CompletedAt,
 		&task.Tags,
+		&task.UserTaskID,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("Ошибка при чтении задач: %w | %w", myErrors.ErrTableIsEmpty, err)
@@ -218,4 +228,39 @@ func (s *DataBaseRepo) Complete(ctx context.Context, id int) (*model.Task, error
 		return nil, fmt.Errorf("Ошибка при чтении задач: %w | %w", myErrors.ErrCantReadTable, err)
 	}
 	return &task, nil
+}
+
+func (s *DataBaseRepo) GetAllTasksForAdmin(ctx context.Context) ([]*model.Task, error) {
+	query := `
+        SELECT id, user_id, title, description, completed, created_at, completed_at, tags
+        FROM tasks
+        ORDER BY user_id, id
+    `
+
+	rows, err := s.dbPool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка чтения задач: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []*model.Task
+	for rows.Next() {
+		task := &model.Task{}
+		err := rows.Scan(
+			&task.ID,
+			&task.UserID,
+			&task.Title,
+			&task.Description,
+			&task.Completed,
+			&task.CreatedAt,
+			&task.CompletedAt,
+			&task.Tags,
+			&task.UserTaskID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, nil
 }

@@ -34,8 +34,9 @@ type TelegramHandler struct {
 	taskService *service.TaskService
 	extService  service.ExtendedTaskService
 
-	userStates   map[int64]string
-	pendingTasks map[int64]*PendingTask
+	userStates   map[int64]string       // chatID -> состояние
+	pendingTasks map[int64]*PendingTask // chatID -> временная задача
+	users        map[int64]*model.User  // chatID -> пользователь (кэш)
 	mu           sync.RWMutex
 }
 
@@ -46,7 +47,35 @@ func NewTelegramHandler(bot *tgbotapi.BotAPI, taskService *service.TaskService, 
 		extService:   extService,
 		userStates:   make(map[int64]string),
 		pendingTasks: make(map[int64]*PendingTask),
+		users:        make(map[int64]*model.User),
 	}
+}
+
+// ========== УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ ==========
+
+func (h *TelegramHandler) getUser(ctx context.Context, chatID int64, msg *tgbotapi.Message) (*model.User, error) {
+	// Проверяем кэш
+	h.mu.RLock()
+	user, exists := h.users[chatID]
+	h.mu.RUnlock()
+
+	if exists && user != nil {
+		return user, nil
+	}
+
+	// Получаем или создаем пользователя
+	user, err := h.extService.GetOrCreateUser(ctx, msg.From.ID, msg.From.UserName, msg.From.FirstName, msg.From.LastName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Сохраняем в кэш
+	h.mu.Lock()
+	h.users[chatID] = user
+	h.mu.Unlock()
+
+	log.Printf("👤 Пользователь: ID=%d, Telegram=%d, Admin=%v", user.ID, user.TelegramID, user.IsAdmin)
+	return user, nil
 }
 
 // ========== УПРАВЛЕНИЕ СОСТОЯНИЯМИ ==========
@@ -121,40 +150,54 @@ func (h *TelegramHandler) handleMessage(ctx context.Context, msg *tgbotapi.Messa
 	text := strings.TrimSpace(msg.Text)
 	chatID := msg.Chat.ID
 
+	// Получаем или создаем пользователя
+	user, err := h.getUser(ctx, chatID, msg)
+	if err != nil {
+		log.Printf("❌ Ошибка получения пользователя: %v", err)
+		h.sendMessage(chatID, "❌ Ошибка авторизации. Попробуйте позже.", false)
+		return
+	}
+
 	currentState := h.getState(chatID)
 
 	if currentState != StateIdle {
-		h.handleDialogState(ctx, chatID, text, currentState)
+		h.handleDialogState(ctx, chatID, user.ID, text, currentState)
 		return
 	}
 
 	switch {
 	case text == "/start" || text == "/help":
-		h.sendHelpMessage(chatID)
+		h.sendHelpMessage(chatID, user.IsAdmin)
 
 	case text == "/add":
 		h.startAddTaskDialog(chatID)
 
 	case strings.HasPrefix(text, "/add "):
-		h.handleFastAdd(ctx, chatID, text)
+		h.handleFastAdd(ctx, chatID, user.ID, text)
 
 	case text == "/list":
-		h.handleListCommand(ctx, chatID)
+		h.handleListCommand(ctx, chatID, user.ID)
 
 	case strings.HasPrefix(text, "/complete"):
-		h.handleCompleteCommand(ctx, chatID, text)
+		h.handleCompleteCommand(ctx, chatID, user.ID, text)
 
 	case strings.HasPrefix(text, "/delete"):
-		h.handleDeleteCommand(ctx, chatID, text)
+		h.handleDeleteCommand(ctx, chatID, user.ID, text)
 
 	case strings.HasPrefix(text, "/find"):
-		h.handleFindCommand(ctx, chatID, text)
+		h.handleFindCommand(ctx, chatID, user.ID, text)
 
 	case text == "/stats":
-		h.handleStatsCommand(ctx, chatID)
+		h.handleStatsCommand(ctx, chatID, user.ID)
 
 	case strings.HasPrefix(text, "/tag"):
-		h.handleTagCommand(ctx, chatID, text)
+		h.handleTagCommand(ctx, chatID, user.ID, text)
+
+	// ✨ АДМИНСКИЕ КОМАНДЫ (добавить здесь)
+	case user.IsAdmin && strings.HasPrefix(text, "/admintask"):
+		h.handleAdminTasks(ctx, chatID)
+	case user.IsAdmin && strings.HasPrefix(text, "/adminuser"):
+		h.handleAdminUsers(ctx, chatID)
 
 	default:
 		h.sendMessage(chatID, "❌ Неизвестная команда. Введите /help", false)
@@ -170,12 +213,22 @@ func (h *TelegramHandler) handleCallback(ctx context.Context, query *tgbotapi.Ca
 
 	h.bot.Send(tgbotapi.NewCallback(query.ID, ""))
 
+	// Получаем пользователя из кэша
+	h.mu.RLock()
+	user := h.users[chatID]
+	h.mu.RUnlock()
+
+	if user == nil {
+		h.sendMessage(chatID, "❌ Ошибка: пользователь не найден", false)
+		return
+	}
+
 	switch {
 	case strings.HasPrefix(data, "complete_"):
 		idStr := strings.TrimPrefix(data, "complete_")
 		id, _ := strconv.Atoi(idStr)
 
-		task, err := h.taskService.CompleteTask(ctx, id)
+		task, err := h.taskService.CompleteTask(ctx, user.ID, id)
 		if err != nil {
 			h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
 			return
@@ -183,22 +236,17 @@ func (h *TelegramHandler) handleCallback(ctx context.Context, query *tgbotapi.Ca
 		h.updateTaskMessage(chatID, messageID, task)
 
 	case strings.HasPrefix(data, "delete_"):
-		if h.extService == nil {
-			h.sendMessage(chatID, "❌ Удаление недоступно", false)
-			return
-		}
-
 		idStr := strings.TrimPrefix(data, "delete_")
-		id, _ := strconv.Atoi(idStr)
+		taskID, _ := strconv.Atoi(idStr)
 
-		if err := h.extService.DeleteTask(ctx, id); err != nil {
+		if err := h.extService.DeleteTask(ctx, user.ID, taskID); err != nil {
 			h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
 			return
 		}
 
 		deleteMsg := tgbotapi.NewDeleteMessage(chatID, messageID)
 		h.bot.Send(deleteMsg)
-		h.sendMessage(chatID, fmt.Sprintf("🗑️ Задача #%d удалена", id), false)
+		h.sendMessage(chatID, fmt.Sprintf("🗑️ Задача #%d удалена", taskID), false)
 	}
 }
 
@@ -209,7 +257,7 @@ func (h *TelegramHandler) startAddTaskDialog(chatID int64) {
 	h.sendMessage(chatID, "📝 Введите название задачи:", false)
 }
 
-func (h *TelegramHandler) handleDialogState(ctx context.Context, chatID int64, input string, state string) {
+func (h *TelegramHandler) handleDialogState(ctx context.Context, chatID int64, userID int, input string, state string) {
 	switch state {
 	case StateAwaitingTitle:
 		if input == "" {
@@ -252,7 +300,7 @@ func (h *TelegramHandler) handleDialogState(ctx context.Context, chatID int64, i
 			pending.Tags = h.parseTags(input)
 		}
 
-		task, err := h.taskService.AddTask(ctx, pending.Title, pending.Description, pending.Tags)
+		task, err := h.taskService.AddTask(ctx, userID, pending.Title, pending.Description, pending.Tags)
 		h.clearState(chatID)
 
 		if err != nil {
@@ -272,16 +320,7 @@ func (h *TelegramHandler) sendMessage(chatID int64, text string, markdown bool) 
 	if markdown {
 		msg.ParseMode = "Markdown"
 	}
-
-	_, err := h.bot.Send(msg)
-	if err != nil {
-		log.Printf("❌ Ошибка отправки сообщения: %v", err)
-		// Попробуем отправить без Markdown
-		if markdown {
-			plainMsg := tgbotapi.NewMessage(chatID, text)
-			h.bot.Send(plainMsg)
-		}
-	}
+	h.bot.Send(msg)
 }
 
 func (h *TelegramHandler) sendMarkdown(chatID int64, text string) {
@@ -292,7 +331,7 @@ func (h *TelegramHandler) sendMarkdown(chatID int64, text string) {
 
 // ========== КОМАНДЫ ==========
 
-func (h *TelegramHandler) sendHelpMessage(chatID int64) {
+func (h *TelegramHandler) sendHelpMessage(chatID int64, isAdmin bool) {
 	helpText := `📋 *TaskTracker Bot - Команды*
 
 /add - Добавить задачу (пошагово)
@@ -304,16 +343,25 @@ func (h *TelegramHandler) sendHelpMessage(chatID int64) {
 /tag <тег> - Найти задачи по тегу
 /stats - Показать статистику
 /help - Показать эту справку`
+
+	if isAdmin {
+		helpText += `
+
+*👑 Админ-команды:*
+/admintasks - Все задачи всех пользователей
+/adminusers - Список всех пользователей`
+	}
+
 	h.sendMarkdown(chatID, helpText)
 }
 
-func (h *TelegramHandler) handleFastAdd(ctx context.Context, chatID int64, text string) {
+func (h *TelegramHandler) handleFastAdd(ctx context.Context, chatID int64, userID int, text string) {
 	rawTitle := strings.TrimPrefix(text, "/add ")
 	rawTitle = strings.TrimSpace(rawTitle)
 
 	title, tags := h.parseTitleAndTags(rawTitle)
 
-	task, err := h.taskService.AddTask(ctx, title, "", tags)
+	task, err := h.taskService.AddTask(ctx, userID, title, "", tags)
 	if err != nil {
 		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
 		return
@@ -322,8 +370,8 @@ func (h *TelegramHandler) handleFastAdd(ctx context.Context, chatID int64, text 
 	h.sendTaskCard(chatID, task)
 }
 
-func (h *TelegramHandler) handleListCommand(ctx context.Context, chatID int64) {
-	tasks, err := h.taskService.GetAllTasks(ctx)
+func (h *TelegramHandler) handleListCommand(ctx context.Context, chatID int64, userID int) {
+	tasks, err := h.taskService.GetAllTasks(ctx, userID)
 	if err != nil {
 		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
 		return
@@ -334,66 +382,36 @@ func (h *TelegramHandler) handleListCommand(ctx context.Context, chatID int64) {
 		return
 	}
 
-	// Отправляем счетчик
-	h.sendMessage(chatID, fmt.Sprintf("📊 Найдено задач: %d", len(tasks)), false)
-
-	// Отправляем каждую задачу, НО не прерываем цикл при ошибке
-	successCount := 0
-	for i, task := range tasks {
-		log.Printf("🔄 Отправка задачи %d/%d (ID=%d)", i+1, len(tasks), task.ID)
-
-		err := h.sendTaskCardSafe(chatID, task)
-		if err != nil {
-			log.Printf("⚠️ Не удалось отправить задачу #%d: %v", task.ID, err)
-			// Отправляем упрощенную версию
-			fallbackMsg := tgbotapi.NewMessage(chatID, fmt.Sprintf("❌ Задача #%d не отображается: %s", task.ID, task.Title))
-			h.bot.Send(fallbackMsg)
-		} else {
-			successCount++
-		}
+	for _, task := range tasks {
+		h.sendTaskCard(chatID, task)
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	// Отправляем итог
 	completed := 0
 	for _, t := range tasks {
 		if t.Completed {
 			completed++
 		}
 	}
-	summary := fmt.Sprintf("📊 *Итого:* %d задач | ✅ Выполнено: %d | ⏳ В работе: %d\n✅ Успешно отправлено: %d",
-		len(tasks), completed, len(tasks)-completed, successCount)
+	summary := fmt.Sprintf("📊 *Итого:* %d задач | ✅ Выполнено: %d | ⏳ В работе: %d",
+		len(tasks), completed, len(tasks)-completed)
 	h.sendMarkdown(chatID, summary)
 }
 
-func (h *TelegramHandler) sendTaskCardSafe(chatID int64, task *model.Task) error {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("🔥 PANIC в sendTaskCard для задачи #%d: %v", task.ID, r)
-		}
-	}()
-
-	if task == nil {
-		return fmt.Errorf("task is nil")
-	}
-
-	return h.sendTaskCard(chatID, task)
-}
-
-func (h *TelegramHandler) handleCompleteCommand(ctx context.Context, chatID int64, text string) {
+func (h *TelegramHandler) handleCompleteCommand(ctx context.Context, chatID int64, userID int, text string) {
 	parts := strings.SplitN(text, " ", 2)
 	if len(parts) < 2 {
 		h.sendMessage(chatID, "❌ Использование: /complete <ID>", false)
 		return
 	}
 
-	id, err := strconv.Atoi(parts[1])
+	taskID, err := strconv.Atoi(parts[1])
 	if err != nil {
 		h.sendMessage(chatID, "❌ ID должен быть числом", false)
 		return
 	}
 
-	task, err := h.taskService.CompleteTask(ctx, id)
+	task, err := h.taskService.CompleteTask(ctx, userID, taskID)
 	if err != nil {
 		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
 		return
@@ -402,46 +420,41 @@ func (h *TelegramHandler) handleCompleteCommand(ctx context.Context, chatID int6
 	h.sendMessage(chatID, fmt.Sprintf("✅ Задача \"%s\" выполнена!", task.Title), false)
 }
 
-func (h *TelegramHandler) handleDeleteCommand(ctx context.Context, chatID int64, text string) {
-	if h.extService == nil {
-		h.sendMessage(chatID, "❌ Удаление недоступно", false)
-		return
-	}
-
+func (h *TelegramHandler) handleDeleteCommand(ctx context.Context, chatID int64, userID int, text string) {
 	parts := strings.Split(text, " ")
 	if len(parts) < 2 {
 		h.sendMessage(chatID, "❌ Использование: /delete <ID>", false)
 		return
 	}
 
-	id, err := strconv.Atoi(parts[1])
+	taskID, err := strconv.Atoi(parts[1])
 	if err != nil {
 		h.sendMessage(chatID, "❌ ID должен быть числом", false)
 		return
 	}
 
-	if err := h.extService.DeleteTask(ctx, id); err != nil {
+	if err := h.extService.DeleteTask(ctx, userID, taskID); err != nil {
 		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
 		return
 	}
 
-	h.sendMessage(chatID, fmt.Sprintf("🗑️ Задача #%d удалена", id), false)
+	h.sendMessage(chatID, fmt.Sprintf("🗑️ Задача #%d удалена", taskID), false)
 }
 
-func (h *TelegramHandler) handleFindCommand(ctx context.Context, chatID int64, text string) {
+func (h *TelegramHandler) handleFindCommand(ctx context.Context, chatID int64, userID int, text string) {
 	parts := strings.Split(text, " ")
 	if len(parts) < 2 {
 		h.sendMessage(chatID, "❌ Использование: /find <ID>", false)
 		return
 	}
 
-	id, err := strconv.Atoi(parts[1])
+	taskID, err := strconv.Atoi(parts[1])
 	if err != nil {
 		h.sendMessage(chatID, "❌ ID должен быть числом", false)
 		return
 	}
 
-	task, err := h.taskService.GetTaskById(ctx, id)
+	task, err := h.taskService.GetTaskById(ctx, userID, taskID)
 	if err != nil {
 		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
 		return
@@ -450,7 +463,7 @@ func (h *TelegramHandler) handleFindCommand(ctx context.Context, chatID int64, t
 	h.sendTaskCard(chatID, task)
 }
 
-func (h *TelegramHandler) handleTagCommand(ctx context.Context, chatID int64, text string) {
+func (h *TelegramHandler) handleTagCommand(ctx context.Context, chatID int64, userID int, text string) {
 	parts := strings.Split(text, " ")
 	if len(parts) < 2 {
 		h.sendMessage(chatID, "❌ Использование: /tag <тег>", false)
@@ -458,7 +471,7 @@ func (h *TelegramHandler) handleTagCommand(ctx context.Context, chatID int64, te
 	}
 
 	tag := parts[1]
-	tasks, err := h.taskService.GetTasksByTag(ctx, tag)
+	tasks, err := h.taskService.GetTasksByTag(ctx, userID, tag)
 	if err != nil {
 		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
 		return
@@ -471,31 +484,29 @@ func (h *TelegramHandler) handleTagCommand(ctx context.Context, chatID int64, te
 
 	for _, task := range tasks {
 		h.sendTaskCard(chatID, task)
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	summary := fmt.Sprintf("📊 *Найдено задач с тегом \"%s\":* %d", tag, len(tasks))
 	h.sendMarkdown(chatID, summary)
 }
 
-func (h *TelegramHandler) handleStatsCommand(ctx context.Context, chatID int64) {
+func (h *TelegramHandler) handleStatsCommand(ctx context.Context, chatID int64, userID int) {
 	if h.extService == nil {
 		h.sendMessage(chatID, "❌ Статистика доступна только при использовании PostgreSQL", false)
 		return
 	}
 
-	// Сначала показываем, что обновляем
-	msg := h.sendMessageTemp(chatID, "📊 Обновляю статистику...")
+	h.sendMessage(chatID, "📊 Обновляю статистику...", false)
 
-	// Принудительно обновляем статистику
-	stats, err := h.extService.GetStatsForce(ctx)
+	stats, err := h.extService.GetStatsForce(ctx, userID)
 	if err != nil {
-		h.editMessage(chatID, msg.MessageID, fmt.Sprintf("❌ Ошибка: %v", err))
+		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
 		return
 	}
 
 	if stats == nil || stats.Total == 0 {
-		h.editMessage(chatID, msg.MessageID, "📭 Нет данных для статистики")
+		h.sendMessage(chatID, "📭 Нет данных для статистики", false)
 		return
 	}
 
@@ -516,27 +527,106 @@ func (h *TelegramHandler) handleStatsCommand(ctx context.Context, chatID int64) 
 		statsText += fmt.Sprintf("\n🔥 Самый продуктивный день: %s\n", stats.BestDay)
 	}
 
-	h.editMessage(chatID, msg.MessageID, statsText)
+	h.sendMarkdown(chatID, statsText)
 }
 
-// sendMessageTemp отправляет временное сообщение и возвращает его
-func (h *TelegramHandler) sendMessageTemp(chatID int64, text string) tgbotapi.Message {
-	msg := tgbotapi.NewMessage(chatID, text)
-	sentMsg, _ := h.bot.Send(msg)
-	return sentMsg
+// ========== АДМИНСКИЕ КОМАНДЫ ==========
+
+func (h *TelegramHandler) handleAdminTasks(ctx context.Context, chatID int64) {
+	if h.extService == nil {
+		h.sendMessage(chatID, "❌ Админ-панель доступна только при использовании PostgreSQL", false)
+		return
+	}
+
+	tasks, err := h.extService.GetAllTasksForAdmin(ctx)
+	if err != nil {
+		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
+		return
+	}
+
+	if len(tasks) == 0 {
+		h.sendMessage(chatID, "📭 Нет задач ни у одного пользователя.", false)
+		return
+	}
+
+	h.sendMessage(chatID, fmt.Sprintf("👑 *Всего задач в системе:* %d\n\n", len(tasks)), true)
+
+	// Группируем по пользователям
+	userTasks := make(map[int][]*model.Task)
+	for _, task := range tasks {
+		userTasks[task.UserID] = append(userTasks[task.UserID], task)
+	}
+
+	for userID, userTaskList := range userTasks {
+		user, _ := h.extService.GetUserByID(ctx, userID)
+		username := "unknown"
+		if user != nil {
+			username = user.Username
+			if username == "" {
+				username = user.FirstName
+			}
+		}
+
+		h.sendMessage(chatID, fmt.Sprintf("👤 *Пользователь: %s* (ID: %d) — %d задач", username, userID, len(userTaskList)), true)
+
+		for _, task := range userTaskList {
+			status := "❌"
+			if task.Completed {
+				status = "✅"
+			}
+			h.sendMessage(chatID, fmt.Sprintf("  %s #%d: %s", status, task.ID, task.Title), false)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 }
 
-// editMessage редактирует существующее сообщение
-func (h *TelegramHandler) editMessage(chatID int64, messageID int, text string) {
-	editMsg := tgbotapi.NewEditMessageText(chatID, messageID, text)
-	editMsg.ParseMode = "Markdown"
-	h.bot.Send(editMsg)
+func (h *TelegramHandler) handleAdminUsers(ctx context.Context, chatID int64) {
+	if h.extService == nil {
+		h.sendMessage(chatID, "❌ Админ-панель доступна только при использовании PostgreSQL", false)
+		return
+	}
+
+	users, err := h.extService.GetAllUsers(ctx)
+	if err != nil {
+		h.sendMessage(chatID, fmt.Sprintf("❌ Ошибка: %v", err), false)
+		return
+	}
+
+	if len(users) == 0 {
+		h.sendMessage(chatID, "📭 Нет пользователей.", false)
+		return
+	}
+
+	var sb strings.Builder
+	sb.WriteString("👑 *Список пользователей*\n\n")
+
+	for _, u := range users {
+		adminBadge := ""
+		if u.IsAdmin {
+			adminBadge = " 👑"
+		}
+		name := u.Username
+		if name == "" {
+			name = u.FirstName
+		}
+		if name == "" {
+			name = strconv.FormatInt(u.TelegramID, 10)
+		}
+		sb.WriteString(fmt.Sprintf("• *%s* (ID: %d)%s\n", name, u.ID, adminBadge))
+		sb.WriteString(fmt.Sprintf("  Telegram: `%d`\n", u.TelegramID))
+		sb.WriteString(fmt.Sprintf("  Активен: %s\n", u.LastActive.Format("02.01.2006 15:04")))
+		sb.WriteString("\n")
+	}
+
+	h.sendMarkdown(chatID, sb.String())
 }
 
 // ========== ОТОБРАЖЕНИЕ ЗАДАЧ ==========
 
-func (h *TelegramHandler) sendTaskCard(chatID int64, task *model.Task) error {
-	log.Printf("📤 Начинаю отправку задачи #%d", task.ID)
+func (h *TelegramHandler) sendTaskCard(chatID int64, task *model.Task) {
+	if task == nil {
+		return
+	}
 
 	statusEmoji := "❌"
 	statusText := "НЕ ВЫПОЛНЕНА"
@@ -547,34 +637,27 @@ func (h *TelegramHandler) sendTaskCard(chatID int64, task *model.Task) error {
 
 	var sb strings.Builder
 
-	// Потенциально опасное место: экранирование
-	title := escapeMarkdown(task.Title)
-	log.Printf("  Название: %s", title)
+	sb.WriteString("┌────────────────────────────────────────┐\n")
+	sb.WriteString(fmt.Sprintf("│ 📋 *Задача #%d*\n", task.UserTaskID))
+	sb.WriteString(fmt.Sprintf("│ %s *%s*\n", statusEmoji, statusText))
+	sb.WriteString("├────────────────────────────────────────┤\n")
 
+	title := escapeMarkdown(task.Title)
 	if len(title) > 40 {
 		title = title[:37] + "..."
 	}
-
-	sb.WriteString("┌────────────────────────────────────────┐\n")
-	sb.WriteString(fmt.Sprintf("│ 📋 *Задача #%d*\n", task.ID))
-	sb.WriteString(fmt.Sprintf("│ %s *%s*\n", statusEmoji, statusText))
-	sb.WriteString("├────────────────────────────────────────┤\n")
 	sb.WriteString(fmt.Sprintf("│ 📝 *Название:* %s\n", title))
 
-	// Опасное место: описание
 	if task.Description != "" {
 		desc := escapeMarkdown(task.Description)
-		log.Printf("  Описание: %s", desc)
 		if len(desc) > 40 {
 			desc = desc[:37] + "..."
 		}
 		sb.WriteString(fmt.Sprintf("│ 📄 *Описание:* %s\n", desc))
 	}
 
-	// Опасное место: теги
 	if len(task.Tags) > 0 {
 		tagsStr := strings.Join(task.Tags, " ")
-		log.Printf("  Теги: %s", tagsStr)
 		if len(tagsStr) > 35 {
 			tagsStr = tagsStr[:32] + "..."
 		}
@@ -584,20 +667,21 @@ func (h *TelegramHandler) sendTaskCard(chatID int64, task *model.Task) error {
 	sb.WriteString(fmt.Sprintf("│ ⏰ *Создана:* %s\n", task.CreatedAt.Format("02.01.2006 15:04")))
 
 	if task.Completed && task.CompletedAt != nil {
-		sb.WriteString(fmt.Sprintf("│ ✅ *Завершена:* %s\n", task.CompletedAt.Format("02.01.2006 15:04")))
+		fmt.Fprintf(&sb, "│ ✅ *Завершена:* %s\n", task.CompletedAt.Format("02.01.2006 15:04"))
 	}
 
 	sb.WriteString("└────────────────────────────────────────┘")
 
 	var rows [][]tgbotapi.InlineKeyboardButton
+
 	if !task.Completed {
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("✅ Выполнить", fmt.Sprintf("complete_%d", task.ID)),
-			tgbotapi.NewInlineKeyboardButtonData("🗑️ Удалить", fmt.Sprintf("delete_%d", task.ID)),
+			tgbotapi.NewInlineKeyboardButtonData("✅ Выполнить", fmt.Sprintf("complete_%d", task.UserTaskID)),
+			tgbotapi.NewInlineKeyboardButtonData("🗑️ Удалить", fmt.Sprintf("delete_%d", task.UserTaskID)),
 		))
 	} else {
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🗑️ Удалить", fmt.Sprintf("delete_%d", task.ID)),
+			tgbotapi.NewInlineKeyboardButtonData("🗑️ Удалить", fmt.Sprintf("delete_%d", task.UserTaskID)),
 		))
 	}
 
@@ -606,21 +690,14 @@ func (h *TelegramHandler) sendTaskCard(chatID int64, task *model.Task) error {
 	msg := tgbotapi.NewMessage(chatID, sb.String())
 	msg.ParseMode = "Markdown"
 	msg.ReplyMarkup = inlineKeyboard
-
-	_, err := h.bot.Send(msg)
-	if err != nil {
-		log.Printf("❌ Ошибка отправки: %v", err)
-		return err
-	}
-
-	log.Printf("✅ Задача #%d отправлена", task.ID)
-	return nil
+	h.bot.Send(msg)
 }
+
 func (h *TelegramHandler) updateTaskMessage(chatID int64, messageID int, task *model.Task) {
 	var sb strings.Builder
 
 	sb.WriteString("┌────────────────────────────────────────┐\n")
-	sb.WriteString(fmt.Sprintf("│ 📋 *Задача #%d*\n", task.ID))
+	fmt.Fprintf(&sb, "│ 📋 *Задача #%d*\n", task.UserTaskID)
 	sb.WriteString("│ ✅ *ВЫПОЛНЕНА*\n")
 	sb.WriteString("├────────────────────────────────────────┤\n")
 
@@ -635,7 +712,7 @@ func (h *TelegramHandler) updateTaskMessage(chatID int64, messageID int, task *m
 		if len(desc) > 40 {
 			desc = desc[:37] + "..."
 		}
-		sb.WriteString(fmt.Sprintf("│ 📄 *Описание:* %s\n", desc))
+		fmt.Fprintf(&sb, "│ 📄 *Описание:* %s\n", desc)
 	}
 
 	if len(task.Tags) > 0 {
@@ -643,20 +720,20 @@ func (h *TelegramHandler) updateTaskMessage(chatID int64, messageID int, task *m
 		if len(tagsStr) > 35 {
 			tagsStr = tagsStr[:32] + "..."
 		}
-		sb.WriteString(fmt.Sprintf("│ 🏷️ *Теги:* `%s`\n", tagsStr))
+		fmt.Fprintf(&sb, "│ 🏷️ *Теги:* `%s`\n", tagsStr)
 	}
 
-	sb.WriteString(fmt.Sprintf("│ ⏰ *Создана:* %s\n", task.CreatedAt.Format("02.01.2006 15:04")))
+	fmt.Fprintf(&sb, "│ ⏰ *Создана:* %s\n", task.CreatedAt.Format("02.01.2006 15:04"))
 
 	if task.CompletedAt != nil {
-		sb.WriteString(fmt.Sprintf("│ ✅ *Завершена:* %s\n", task.CompletedAt.Format("02.01.2006 15:04")))
+		fmt.Fprintf(&sb, "│ ✅ *Завершена:* %s\n", task.CompletedAt.Format("02.01.2006 15:04"))
 	}
 
 	sb.WriteString("└────────────────────────────────────────┘")
 
 	inlineKeyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🗑️ Удалить", fmt.Sprintf("delete_%d", task.ID)),
+			tgbotapi.NewInlineKeyboardButtonData("🗑️ Удалить", fmt.Sprintf("delete_%d", task.UserTaskID)),
 		),
 	)
 

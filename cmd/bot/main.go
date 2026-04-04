@@ -30,7 +30,7 @@ func main() {
 	}
 	defer repo.Close()
 
-	go repo.StartStatsUpdater(ctx, 5*time.Minute)
+	//repo.StartStatsUpdater(ctx, 5*time.Minute)
 
 	taskSvc := service.NewTaskService(repo)
 	extendedSvc := service.NewPostgresTaskService(repo)

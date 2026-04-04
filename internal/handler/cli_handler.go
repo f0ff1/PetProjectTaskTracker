@@ -21,13 +21,15 @@ type CLIHandler struct {
 	baseService     *service.TaskService
 	extendedService service.ExtendedTaskService
 	reader          *bufio.Reader
+	userID          int
 }
 
-func NewCLIHandler(service *service.TaskService, extendedSvc service.ExtendedTaskService) *CLIHandler {
+func NewCLIHandler(service *service.TaskService, extendedSvc service.ExtendedTaskService, userID int) *CLIHandler {
 	return &CLIHandler{
 		baseService:     service,
 		extendedService: extendedSvc,
 		reader:          bufio.NewReader(os.Stdin),
+		userID:          userID,
 	}
 }
 
@@ -149,7 +151,7 @@ func (h *CLIHandler) handleAdd(defCtx context.Context) {
 	ctx, cancel := context.WithTimeout(defCtx, 1*time.Second)
 	defer cancel()
 
-	task, err := h.baseService.AddTask(ctx, title, description, tags)
+	task, err := h.baseService.AddTask(ctx, h.userID, title, description, tags)
 	if err != nil {
 		slog.Error("Ошибка добавления задачи", "err", err)
 		return
@@ -158,21 +160,21 @@ func (h *CLIHandler) handleAdd(defCtx context.Context) {
 }
 
 func (h *CLIHandler) handleDelete(defCtx context.Context) {
-	id := h.readID()
+	taskID := h.readID()
 	ctx, cancel := context.WithTimeout(defCtx, 1*time.Second)
 	defer cancel()
-	err := h.extendedService.DeleteTask(ctx, id)
+	err := h.extendedService.DeleteTask(ctx, h.userID, taskID)
 	if err != nil {
-		slog.Error("Ошибка удаления задачи", "err", err, "id", id)
+		slog.Error("Ошибка удаления задачи", "err", err, "id", taskID)
 		return
 	}
-	fmt.Printf("✅ Задача с ID %d удалена\n", id)
+	fmt.Printf("✅ Задача с ID %d удалена\n", taskID)
 }
 
 func (h *CLIHandler) handleList(defCtx context.Context) {
 	ctx, cancel := context.WithTimeout(defCtx, 5*time.Second)
 	defer cancel()
-	tasks, err := h.baseService.GetAllTasks(ctx)
+	tasks, err := h.baseService.GetAllTasks(ctx, h.userID)
 	if err != nil {
 		slog.Error("Ошибка получения списка задач", "err", err)
 		return
@@ -189,12 +191,12 @@ func (h *CLIHandler) handleList(defCtx context.Context) {
 }
 
 func (h *CLIHandler) handleFindById(defCtx context.Context) {
-	id := h.readID()
+	taskID := h.readID()
 	ctx, cancel := context.WithTimeout(defCtx, 2*time.Second)
 	defer cancel()
-	task, err := h.baseService.GetTaskById(ctx, id)
+	task, err := h.baseService.GetTaskById(ctx, h.userID, taskID)
 	if err != nil {
-		slog.Error("Ошибка при поиске задачи по ID", "err", err, "id", id)
+		slog.Error("Ошибка при поиске задачи по ID", "err", err, "id", taskID)
 		return
 	}
 
@@ -206,7 +208,7 @@ func (h *CLIHandler) handleFineByTag(defCtx context.Context) {
 	tag := strings.TrimSpace(h.readInput())
 	ctx, cancel := context.WithTimeout(defCtx, 1*time.Second)
 	defer cancel()
-	tasks, err := h.baseService.GetTasksByTag(ctx, tag)
+	tasks, err := h.baseService.GetTasksByTag(ctx, h.userID, tag)
 	if err != nil {
 		slog.Error("Ошибка при поиске задач по тегу", "err", err, "tag", tag)
 		return
@@ -223,14 +225,14 @@ func (h *CLIHandler) handleFineByTag(defCtx context.Context) {
 }
 
 func (h *CLIHandler) handleComplete(defCtx context.Context) {
-	id := h.readID()
+	taskID := h.readID()
 
 	ctx, cancel := context.WithTimeout(defCtx, 1*time.Second)
 	defer cancel()
 
-	task, err := h.baseService.CompleteTask(ctx, id)
+	task, err := h.baseService.CompleteTask(ctx, h.userID, taskID)
 	if err != nil {
-		slog.Error("Ошибка при отмечании задачи как выполненной", "err", err, "id", id)
+		slog.Error("Ошибка при отмечании задачи как выполненной", "err", err, "id", taskID)
 		return
 	}
 	fmt.Printf("✅ Задача '%s' отмечена как выполненная\n", task.Title)
@@ -238,7 +240,7 @@ func (h *CLIHandler) handleComplete(defCtx context.Context) {
 
 func (h *CLIHandler) handleStats(defCtx context.Context) {
 	slog.Info("Загрузка статистики")
-	stats, lastUpdated, isUpdating, err := h.extendedService.GetStatsWithInfo(defCtx)
+	stats, lastUpdated, isUpdating, err := h.extendedService.GetStatsWithInfo(defCtx, h.userID)
 	if err != nil {
 		slog.Error("Ошибка получения статистики", "err", err)
 		return

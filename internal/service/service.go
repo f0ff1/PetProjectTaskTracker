@@ -35,35 +35,39 @@ func generateDefaultName() string {
 	return fmt.Sprintf("def-name-exr-%07d", randNumbers)
 }
 
-func (s *TaskService) AddTask(ctx context.Context, title, desc string, tags []string) (*model.Task, error) {
+func (s *TaskService) AddTask(ctx context.Context, userID int, title, desc string, tags []string) (*model.Task, error) {
 	task := createTask(title, desc, tags)
-	return s.repo.Add(ctx, task)
+	return s.repo.Add(ctx, userID, task)
 }
 
-func (s *TaskService) GetAllTasks(ctx context.Context) ([]*model.Task, error) {
-	return s.repo.GetAll(ctx)
+func (s *TaskService) GetAllTasks(ctx context.Context, userID int) ([]*model.Task, error) {
+	return s.repo.GetAllTasksByUser(ctx, userID)
 }
 
-func (s *TaskService) GetTaskById(ctx context.Context, id int) (*model.Task, error) {
-	if id < 1 {
+func (s *TaskService) GetTaskById(ctx context.Context, userID, taskID int) (*model.Task, error) {
+	if taskID < 1 {
 		return nil, fmt.Errorf("Ошибка сервиса: %w", customError.ErrIdNotExists)
 	}
-	return s.repo.GetByID(ctx, id)
+	return s.repo.GetByID(ctx, userID, taskID)
 }
 
-func (s *TaskService) GetTasksByTag(ctx context.Context, tag string) ([]*model.Task, error) {
+func (s *TaskService) GetTasksByTag(ctx context.Context, userID int, tag string) ([]*model.Task, error) {
 	if tag == "" {
 		return nil, fmt.Errorf("Ошибка сервиса: %w", customError.ErrWrongTag)
 	}
-	return s.repo.GetByTag(ctx, tag)
+	return s.repo.GetByTag(ctx, userID, tag)
 }
 
-func (s *TaskService) CompleteTask(ctx context.Context, id int) (*model.Task, error) {
-	if id < 1 {
+func (s *TaskService) CompleteTask(ctx context.Context, userID, taskID int) (*model.Task, error) {
+	if taskID < 1 {
 		return nil, fmt.Errorf("Ошибка сервиса: %w", customError.ErrIdNotExists)
 	}
-	return s.repo.Complete(ctx, id)
+	return s.repo.Complete(ctx, userID, taskID)
 }
+
+/* Ебучее расширение для Postgres, чтобы не плодить кучу сервисов и не дублировать код */
+/* Ебучее расширение для Postgres, чтобы не плодить кучу сервисов и не дублировать код */
+/* Ебучее расширение для Postgres, чтобы не плодить кучу сервисов и не дублировать код */
 
 type PostgresTaskService struct {
 	*TaskService
@@ -74,23 +78,43 @@ func NewPostgresTaskService(repo repository.PostgresRepository) *PostgresTaskSer
 	return &PostgresTaskService{TaskService: NewTaskService(repo), repo: repo}
 }
 
-func (s *PostgresTaskService) DeleteTask(ctx context.Context, id int) error {
-	if id < 1 {
+func (s *PostgresTaskService) DeleteTask(ctx context.Context, userID, taskID int) error {
+	if taskID < 1 {
 		return fmt.Errorf("Ошибка сервиса: %w", customError.ErrIdNotExists)
 	}
-	return s.repo.DeleteByID(ctx, id)
+	return s.repo.DeleteByID(ctx, userID, taskID)
 }
 
-func (s *PostgresTaskService) GetStatsWithInfo(ctx context.Context) (*model.TaskStats, time.Time, bool, error) {
-	return s.repo.GetStatsWithInfo(ctx)
+func (s *PostgresTaskService) GetStatsWithInfo(ctx context.Context, userID int) (*model.TaskStats, time.Time, bool, error) {
+	return s.repo.GetStatsWithInfo(ctx, userID)
 }
 
 // GetStats получает статистику (с проверкой свежести)
-func (s *PostgresTaskService) GetStats(ctx context.Context) (*model.TaskStats, error) {
-	return s.repo.GetStatsWithRefresh(ctx, false)
+func (s *PostgresTaskService) GetStats(ctx context.Context, userID int) (*model.TaskStats, error) {
+	return s.repo.GetStatsWithRefresh(ctx, userID, false)
 }
 
 // GetStatsForce принудительно обновляет статистику
-func (s *PostgresTaskService) GetStatsForce(ctx context.Context) (*model.TaskStats, error) {
-	return s.repo.GetStatsWithRefresh(ctx, true)
+func (s *PostgresTaskService) GetStatsForce(ctx context.Context, userID int) (*model.TaskStats, error) {
+	return s.repo.GetStatsWithRefresh(ctx, userID, true)
+}
+
+func (s *PostgresTaskService) GetOrCreateUser(ctx context.Context, telegramID int64, username, firstName, lastName string) (*model.User, error) {
+	return s.repo.GetOrCreateUser(ctx, telegramID, username, firstName, lastName)
+}
+
+func (s *PostgresTaskService) GetUserByID(ctx context.Context, userID int) (*model.User, error) {
+	return s.repo.GetUserByID(ctx, userID)
+}
+
+func (s *PostgresTaskService) GetAllUsers(ctx context.Context) ([]*model.User, error) {
+	return s.repo.GetAllUsers(ctx)
+}
+
+func (s *PostgresTaskService) GetAllTasksForAdmin(ctx context.Context) ([]*model.Task, error) {
+	return s.repo.GetAllTasksForAdmin(ctx)
+}
+
+func (s *PostgresTaskService) GetUserByTelegramID(ctx context.Context, telegramID int64) (*model.User, error) {
+	return s.repo.GetUserByTelegramID(ctx, telegramID)
 }
