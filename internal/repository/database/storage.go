@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 	"unicode/utf8"
 
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -59,12 +60,13 @@ func (s *DataBaseRepo) Add(ctx context.Context, userID int, task *model.Task) (*
 	}
 
 	task.CompletedAt = nil
+	task.CreatedAt = time.Now()
 
-	addQuery := `INSERT INTO tasks (user_id, title, description, tags, due_date, reminder_offset)
-	VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''))
+	addQuery := `INSERT INTO tasks (user_id, title, description, tags, due_date, reminder_offset, created_at)
+	VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7)
 	RETURNING id, user_task_id, created_at`
 
-	err := s.dbPool.QueryRow(ctx, addQuery, userID, taskTitle, taskDesc, taskTags, taskDueDate, taskReminderOffset).Scan(
+	err := s.dbPool.QueryRow(ctx, addQuery, userID, taskTitle, taskDesc, taskTags, taskDueDate, taskReminderOffset, task.CreatedAt).Scan(
 		&task.ID,
 		&task.UserTaskID,
 		&task.CreatedAt,
@@ -203,10 +205,11 @@ func (s *DataBaseRepo) GetByTag(ctx context.Context, userID int, tag string) ([]
 }
 
 func (s *DataBaseRepo) Complete(ctx context.Context, userID int, taskID int) (*model.Task, error) {
-	completeQuery := `update tasks set completed = true, completed_at = CURRENT_TIMESTAMP where user_task_id = $1 and user_id = $2 RETURNING *`
+	completeTime := time.Now()
+	completeQuery := `update tasks set completed = true, completed_at = $1 where user_task_id = $2 and user_id = $3 RETURNING *`
 
 	var task model.Task
-	err := s.dbPool.QueryRow(ctx, completeQuery, taskID, userID).Scan(
+	err := s.dbPool.QueryRow(ctx, completeQuery, completeTime, taskID, userID).Scan(
 		&task.ID,
 		&task.UserID,
 		&task.UserTaskID,

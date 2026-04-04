@@ -11,7 +11,9 @@ RUN go build -o bot ./cmd/bot
 
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates tzdata
+
+ENV TZ=Europe/Moscow
 
 WORKDIR /root/
 
