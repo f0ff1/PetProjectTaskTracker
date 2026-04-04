@@ -58,6 +58,9 @@ func LoadConfig() (*Config, error) {
 }
 
 func (c *Config) GetDSN() string {
+	if !strings.Contains(c.DatabaseURL, "timezone") {
+		return c.DatabaseURL + "&timezone=Europe/Moscow"
+	}
 	return c.DatabaseURL
 }
 
